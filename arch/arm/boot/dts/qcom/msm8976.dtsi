@@ -1278,6 +1278,8 @@
 		compatible = "qcom,android-usb";
 		reg = <0x086000c8 0xc8>;
 		qcom,pm-qos-latency = <59 150 10741>;
+		qcom,android-usb-uicc-nluns = /bits/ 8 <0>;//[BUGFIX]-Add-BEGIN by TCTNB.93391,11/30/2015,ALM927723,Remove Many Disk Devices
+                qcom,android-usb-cdrom;//[BUGFIX]-Add-BEGIN by TCTNB.93391,11/30/2015,ALM927723,USB Driver Auto Install
 	};
 
 	fsusb: qcom,ehci-host@79c0000 {

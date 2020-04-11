@@ -235,7 +235,13 @@ static struct fg_mem_setting settings[FG_MEM_SETTING_MAX] = {
 	SETTING(CHG_TERM_CURRENT, 0x4F8,   2,      250),
 	SETTING(IRQ_VOLT_EMPTY,	 0x458,   3,      3100),
 	SETTING(CUTOFF_VOLTAGE,	 0x40C,   0,      3200),
+/* [FEATURE]-MOD-BEGIN TCTNB.WJ,12/29/2015, PR1208576 */
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	SETTING(VBAT_EST_DIFF,	 0x000,   0,      200),
+#else
 	SETTING(VBAT_EST_DIFF,	 0x000,   0,      30),
+#endif
+/* [FEATURE]-MOD-END TCTNB.WJ,12/29/2015 */
 	SETTING(DELTA_SOC,	 0x450,   3,      1),
 	SETTING(SOC_MAX,	 0x458,   1,      85),
 	SETTING(SOC_MIN,	 0x458,   2,      15),
@@ -283,8 +289,13 @@ static char *fg_batt_type;
 module_param_named(
 	battery_type, fg_batt_type, charp, S_IRUSR | S_IWUSR
 );
-
+// [FEATURE]-ADD-BEGIN TCTSH.SZY,2/23/2016,1652888
+#if defined(CONFIG_TCT_8X76_IDOL4) && defined(FEATURE_TCTSH_MMITEST)
+static int fg_sram_update_period_ms = 1000;
+#else
 static int fg_sram_update_period_ms = 30000;
+#endif
+// [FEATURE]-ADD-END TCTSH.SZY,2/23/2016,1652888
 module_param_named(
 	sram_update_period_ms, fg_sram_update_period_ms, int, S_IRUSR | S_IWUSR
 );
@@ -393,6 +404,11 @@ struct fg_chip {
 	u8			pmic_subtype;
 	u8			pmic_revision;
 	u8			revision[4];
+/* [FEATURE]-ADD-BEGIN TCTNB.WJ,1/4/2016, PR1278852 */
+#if defined(CONFIG_TCT_8X76_COMMON)//szy modify for 1623721,2016.2.18
+	u8			last_msoc;
+#endif
+/* [FEATURE]-ADD-END TCTNB.WJ */
 	u16			soc_base;
 	u16			batt_base;
 	u16			mem_base;
@@ -495,6 +511,18 @@ struct fg_chip {
 	bool			init_done;
 	int			cold_hysteresis;
 	int			hot_hysteresis;
+
+/*MODIFIED-BEGIN by jin.wang, 2016-04-11,BUG-1921545*/
+/* [BUG]-ADD-BEGIN TCTNB.WJ,4/9/2016, PR 1912713 */
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	bool		jeita_hysteresis_support_warmcool;
+	bool		batt_warm;
+	bool		batt_cool;
+	int		cool_hysteresis;
+	int		warm_hysteresis;
+#endif
+/* [BUG]-ADD-END TCTNB.WJ */
+/*MODIFIED-END by jin.wang,BUG-1921545*/
 };
 
 /* FG_MEMIF DEBUGFS structures */
@@ -647,12 +675,19 @@ static int fg_masked_write(struct fg_chip *chip, u16 addr,
 		pr_err("spmi read failed: addr=%03X, rc=%d\n", addr, rc);
 		return rc;
 	}
-	pr_debug("addr = 0x%x read 0x%x\n", addr, reg);
+
+// [FEATURE]-MOD-BEGIN TCTNB.WJ,12/8/2015,1053888
+	if(fg_debug_mask & FG_SPMI_DEBUG_READS)
+		pr_debug("addr = 0x%x read 0x%x\n", addr, reg);
+// [FEATURE]-MOD-END TCTNB.WJ
 
 	reg &= ~mask;
 	reg |= val & mask;
 
-	pr_debug("Writing 0x%x\n", reg);
+// [FEATURE]-MOD-BEGIN TCTNB.WJ,12/8/2015,1053888
+	if(fg_debug_mask & FG_SPMI_DEBUG_WRITES)
+		pr_debug("Writing 0x%x\n", reg);
+// [FEATURE]-MOD-END TCTNB.WJ
 
 	rc = fg_write(chip, &reg, addr, len);
 	if (rc) {
@@ -1655,7 +1690,13 @@ static int get_monotonic_soc_raw(struct fg_chip *chip)
 		if (rc) {
 			pr_err("spmi read failed: addr=%03x, rc=%d\n",
 				chip->soc_base + SOC_MONOTONIC_SOC, rc);
+/* [FEATURE]-MOD-BEGIN TCTNB.WJ,1/4/2016, PR1278852 */
+#if defined(CONFIG_TCT_8X76_COMMON)//szy modify for 1623721,2016.2.18
+			goto read_error;
+#else
 			return rc;
+#endif
+/* [FEATURE]-MOD-END TCTNB.WJ */
 		}
 
 		if (cap[0] == cap[1])
@@ -1666,12 +1707,32 @@ static int get_monotonic_soc_raw(struct fg_chip *chip)
 
 	if (tries == MAX_TRIES_SOC) {
 		pr_err("shadow registers do not match\n");
+/* [FEATURE]-MOD-BEGIN TCTNB.WJ,1/4/2016, PR1278852 */
+#if defined(CONFIG_TCT_8X76_COMMON)//szy modify for 1623721,2016.2.18
+		goto read_error;
+#else
 		return -EINVAL;
+#endif
+/* [FEATURE]-MOD-END TCTNB.WJ */
 	}
 
 	if (fg_debug_mask & FG_POWER_SUPPLY)
 		pr_info_ratelimited("raw: 0x%02x\n", cap[0]);
+/* [FEATURE]-ADD-BEGIN TCTNB.WJ,1/4/2016, PR1278852 */
+#if defined(CONFIG_TCT_8X76_COMMON)//szy modify for 1623721,2016.2.18
+	chip->last_msoc = cap[0];
+#endif
+/* [FEATURE]-ADD-END TCTNB.WJ */
 	return cap[0];
+
+/* [FEATURE]-ADD-BEGIN TCTNB.WJ,1/4/2016, PR1278852 */
+#if defined(CONFIG_TCT_8X76_COMMON)//szy modify for 1623721,2016.2.18
+read_error:
+	pr_err_ratelimited("read msoc error, using last:%d\n",
+						chip->last_msoc);
+	return chip->last_msoc;
+#endif
+/* [FEATURE]-ADD-END TCTNB.WJ */
 }
 
 #define EMPTY_CAPACITY		0
@@ -1700,8 +1761,15 @@ static int get_prop_capacity(struct fg_chip *chip)
 		return EMPTY_CAPACITY;
 	else if (msoc == FULL_SOC_RAW)
 		return FULL_CAPACITY;
+
+/* [FEATURE]-MOD-BEGIN TCTNB.WJ,1/4/2016, PR1278852 */
+#if defined(CONFIG_TCT_8X76_COMMON)//szy modify for 1623721,2016.2.18
+	return DIV_ROUND_UP(msoc * FULL_CAPACITY , FULL_SOC_RAW);
+#else
 	return DIV_ROUND_CLOSEST((msoc - 1) * (FULL_CAPACITY - 2),
 			FULL_SOC_RAW - 2) + 1;
+#endif
+/* [FEATURE]-MOD-END TCTNB.WJ */
 }
 
 #define HIGH_BIAS	3
@@ -2595,6 +2663,12 @@ static int fg_power_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
 		val->intval = get_sram_prop_now(chip, FG_DATA_BATT_TEMP);
+
+/* [FEATURE]-ADD-BEGIN TCTNB.WJ,1/6/2016,FR1253320 */
+#if defined(FEATURE_TCTNB_MMITEST)
+		val->intval = DEFAULT_TEMP_DEGC;
+#endif
+/* [FEATURE]-ADD-END TCTNB.WJ,1/6/2016 */
 		break;
 	case POWER_SUPPLY_PROP_COOL_TEMP:
 		val->intval = get_prop_jeita_temp(chip, FG_MEM_SOFT_COLD);
@@ -3329,6 +3403,60 @@ static void status_change_work(struct work_struct *work)
 	}
 }
 
+
+/*MODIFIED-BEGIN by jin.wang, 2016-04-11,BUG-1921545*/
+/* [BUG]-ADD-BEGIN TCTNB.WJ,4/9/2016, PR 1912713 */
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+static void fg_hysteresis_config_warmcool(struct fg_chip *chip)
+{
+	int soft_hot = 0, soft_cold = 0;
+	soft_hot = get_prop_jeita_temp(chip, FG_MEM_SOFT_HOT);
+	soft_cold = get_prop_jeita_temp(chip, FG_MEM_SOFT_COLD);
+
+	if (chip->health == POWER_SUPPLY_HEALTH_WARM && !chip->batt_warm) {
+		/* turn down the sof hot threshold */
+		chip->batt_warm = true;
+		set_prop_jeita_temp(chip, FG_MEM_SOFT_HOT,
+			soft_hot - chip->warm_hysteresis);
+		if (fg_debug_mask & FG_STATUS)
+			pr_err("set [soft] hot threshold: old warm=%d, new warm=%d\n",
+				soft_hot, soft_hot - chip->warm_hysteresis);
+	} else if (chip->health == POWER_SUPPLY_HEALTH_COOL &&
+		!chip->batt_cool) {
+		/* turn up the soft cold threshold */
+		chip->batt_cool = true;
+		set_prop_jeita_temp(chip, FG_MEM_SOFT_COLD,
+			soft_cold + chip->cool_hysteresis);
+		if (fg_debug_mask & FG_STATUS)
+			pr_err("set [soft] cold threshold: old cool=%d, new cool=%d\n",
+				soft_cold, soft_cold + chip->cool_hysteresis);
+	} else if (chip->health != POWER_SUPPLY_HEALTH_WARM &&
+		chip->batt_warm) {
+		/* restore the soft hot threshold */
+		set_prop_jeita_temp(chip, FG_MEM_SOFT_HOT,
+			soft_hot + chip->warm_hysteresis);
+		chip->batt_warm = !chip->batt_warm;
+		if (fg_debug_mask & FG_STATUS)
+			pr_err("restore [soft] hot threshold: old warm=%d, new warm=%d\n",
+				soft_hot,
+				soft_hot + chip->warm_hysteresis);
+	} else if (chip->health != POWER_SUPPLY_HEALTH_COOL &&
+		chip->batt_cool) {
+		/* restore the soft cold threshold */
+		set_prop_jeita_temp(chip, FG_MEM_SOFT_COLD,
+			soft_cold - chip->cool_hysteresis);
+		chip->batt_cool = !chip->batt_cool;
+		if (fg_debug_mask & FG_STATUS)
+			pr_err("restore [soft] cold threshold: old cool=%d, new cool=%d\n",
+				soft_cold,
+				soft_cold - chip->cool_hysteresis);
+	}
+}
+#endif
+/* [BUG]-ADD-END TCTNB.WJ,4/9/2016, PR 1912713 */
+/*MODIFIED-END by jin.wang,BUG-1921545*/
+
+
 static void fg_hysteresis_config(struct fg_chip *chip)
 {
 	int hard_hot = 0, hard_cold = 0;
@@ -3416,6 +3544,51 @@ static int fg_init_batt_temp_state(struct fg_chip *chip)
 	return rc;
 }
 
+/*MODIFIED-BEGIN by jin.wang, 2016-04-11,BUG-1921545*/
+/* [BUG]-ADD-BEGIN TCTNB.WJ,4/9/2016, PR 1912713 */
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+#define BATT_INFO_STS_WARM_COOL(base)	(base + 0x10)
+#define JEITA_SOFT_HOT_RT_STS	BIT(1)
+#define JEITA_SOFT_COLD_RT_STS	BIT(0)
+static int fg_init_batt_temp_state_warmcool(struct fg_chip *chip)
+{
+	int rc = 0;
+	u8 batt_info_sts=0;
+	int soft_hot = 0, soft_cold = 0;
+
+	rc = fg_read(chip, &batt_info_sts,
+		BATT_INFO_STS_WARM_COOL(chip->batt_base), 1);
+	if (rc) {
+		pr_err("failed to read batt info sts, rc=%d\n", rc);
+		return rc;
+	}
+	soft_hot = get_prop_jeita_temp(chip, FG_MEM_SOFT_HOT);
+	soft_cold = get_prop_jeita_temp(chip, FG_MEM_SOFT_COLD);
+	chip->batt_warm =
+		(batt_info_sts & JEITA_SOFT_HOT_RT_STS) ? true : false;
+	chip->batt_cool =
+		(batt_info_sts & JEITA_SOFT_COLD_RT_STS) ? true : false;
+	if (chip->batt_warm || chip->batt_cool) {
+		if (chip->batt_warm) {
+			if (fg_debug_mask & FG_STATUS)
+				pr_err(" init batt temp: warm \n");
+			chip->health = POWER_SUPPLY_HEALTH_WARM;
+			set_prop_jeita_temp(chip, FG_MEM_SOFT_HOT,
+				soft_hot - chip->warm_hysteresis);
+		} else {
+			if (fg_debug_mask & FG_STATUS)
+				pr_err(" init batt temp: cool \n");
+			chip->health = POWER_SUPPLY_HEALTH_COOL;
+			set_prop_jeita_temp(chip, FG_MEM_SOFT_COLD,
+				soft_cold + chip->cool_hysteresis);
+		}
+	}
+	return rc;
+}
+#endif
+/* [BUG]-ADD-END TCTNB.WJ,4/9/2016, PR 1912713 */
+/*MODIFIED-END by jin.wang,BUG-1921545*/
+
 /*
  * Check for change in the status of input or OTG and schedule
  * IADC gain compensation work.
@@ -3469,6 +3642,15 @@ static int fg_power_set_property(struct power_supply *psy,
 
 		if (chip->jeita_hysteresis_support)
 			fg_hysteresis_config(chip);
+
+/*MODIFIED-BEGIN by jin.wang, 2016-04-11,BUG-1921545*/
+/* [BUG]-ADD-BEGIN TCTNB.WJ,4/9/2016, PR 1912713 */
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+		if (chip->jeita_hysteresis_support_warmcool)
+			fg_hysteresis_config_warmcool(chip);
+#endif
+/* [BUG]-ADD-END TCTNB.WJ,4/9/2016, PR 1912713 */
+/*MODIFIED-END by jin.wang,BUG-1921545*/
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_DONE:
 		chip->charge_done = val->intval;
@@ -3504,7 +3686,12 @@ static int fg_property_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_COOL_TEMP:
 	case POWER_SUPPLY_PROP_WARM_TEMP:
 	case POWER_SUPPLY_PROP_CYCLE_COUNT_ID:
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/3/2015,536521
+#if defined(CONFIG_TCT_8X76_COMMON)//[FEATURE] MODIFY-BY-SUN ZHANGYANG,2016.04.05, DEFECT1910727 //MODIFIED by jin.wang, 2016-04-11,BUG-1921545
+	case POWER_SUPPLY_PROP_UPDATE_NOW:
 		return 1;
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/3/2015,536521
 	default:
 		break;
 	}
@@ -4893,6 +5080,42 @@ static int fg_of_init(struct fg_chip *chip)
 		}
 	}
 
+/*MODIFIED-BEGIN by jin.wang, 2016-04-11,BUG-1921545*/
+/* [BUG]-ADD-BEGIN TCTNB.WJ,4/9/2016, PR 1912713 */
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	if (of_find_property(node, "qcom,cool-warm-jeita-hysteresis", NULL)) {
+		int hard_hot = 0, soft_hot = 0, hard_cold = 0, soft_cold = 0;
+		rc = of_property_read_u32_array(node,
+			"qcom,cool-warm-jeita-hysteresis", temp, 2);
+		if (rc) {
+			pr_err("Error reading cold-hot-jeita-hysteresis rc=%d\n",
+				rc);
+			return rc;
+		}
+		chip->jeita_hysteresis_support_warmcool = true;
+		chip->cool_hysteresis = temp[0];
+		chip->warm_hysteresis = temp[1];
+		hard_hot = settings[FG_MEM_HARD_HOT].value;
+		soft_hot = settings[FG_MEM_SOFT_HOT].value;
+		hard_cold = settings[FG_MEM_HARD_COLD].value;
+		soft_cold = settings[FG_MEM_SOFT_COLD].value;
+		if (((soft_hot - chip->warm_hysteresis) < soft_cold) ||
+			((soft_cold + chip->cool_hysteresis) > soft_hot) ||
+			((soft_hot - chip->warm_hysteresis) > hard_hot) ||
+			((soft_cold + chip->cool_hysteresis) < hard_cold)){
+			chip->jeita_hysteresis_support_warmcool = false;
+			pr_err("invalid hysteresis: warm_hysterresis = %d cool_hysteresis = %d\n",
+				chip->warm_hysteresis, chip->cool_hysteresis);
+		} else {
+			if (fg_debug_mask & FG_STATUS)
+				pr_err("valid w_hysteresis = %d, c_hysteresis = %d\n",
+					chip->warm_hysteresis, chip->cool_hysteresis);
+		}
+	}
+#endif
+/* [BUG]-ADD-END TCTNB.WJ,4/9/2016, PR 1912713 */
+/*MODIFIED-END by jin.wang,BUG-1921545*/
+
 	OF_READ_SETTING(FG_MEM_BCL_LM_THRESHOLD, "bcl-lm-threshold-ma",
 		rc, 1);
 	OF_READ_SETTING(FG_MEM_BCL_MH_THRESHOLD, "bcl-mh-threshold-ma",
@@ -5726,7 +5949,13 @@ static int fg_common_hw_init(struct fg_chip *chip)
 	}
 
 	rc = fg_mem_masked_write(chip, settings[FG_MEM_DELTA_SOC].address, 0xFF,
+/* [FEATURE]-MOD-BEGIN TCTNB.WJ,1/8/2016, FR 1391100 */
+#if defined(CONFIG_TCT_8X76_COMMON)//szy modify for 1623721,2016.2.18
+			1,
+#else
 			soc_to_setpoint(settings[FG_MEM_DELTA_SOC].value),
+#endif
+/* [FEATURE]-MOD-END TCTNB.WJ */
 			settings[FG_MEM_DELTA_SOC].offset);
 	if (rc) {
 		pr_err("failed to write delta soc rc=%d\n", rc);
@@ -6113,6 +6342,11 @@ static int fg_probe(struct spmi_device *spmi)
 	chip->spmi = spmi;
 	chip->dev = &(spmi->dev);
 
+/* [FEATURE]-ADD-BEGIN TCTNB.WJ,1/4/2016, PR1278852 */
+#if defined(CONFIG_TCT_8X76_COMMON)//szy modify for 1623721,2016.2.18
+	chip->last_msoc = 127;
+#endif
+/* [FEATURE]-ADD-END TCTNB.WJ */
 	wakeup_source_init(&chip->empty_check_wakeup_source.source,
 			"qpnp_fg_empty_check");
 	wakeup_source_init(&chip->memif_wakeup_source.source,
@@ -6237,6 +6471,20 @@ static int fg_probe(struct spmi_device *spmi)
 			goto of_init_fail;
 		}
 	}
+
+/*MODIFIED-BEGIN by jin.wang, 2016-04-11,BUG-1921545*/
+/* [BUG]-ADD-BEGIN TCTNB.WJ,4/9/2016, PR 1912713 */
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	if (chip->jeita_hysteresis_support_warmcool) {
+		rc = fg_init_batt_temp_state_warmcool(chip);
+		if (rc) {
+			pr_err("failed to get battery warm/cool status rc%d\n", rc);
+			goto of_init_fail;
+		}
+	}
+#endif
+/* [BUG]-ADD-END TCTNB.WJ,4/9/2016, PR 1912713 */
+/*MODIFIED-END by jin.wang,BUG-1921545*/
 
 	reg = 0xFF;
 	rc = fg_write(chip, &reg, INT_EN_CLR(chip->mem_base), 1);

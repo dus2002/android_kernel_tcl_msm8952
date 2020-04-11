@@ -76,6 +76,66 @@
 			};
 		};
 
+		quin-mi2s-mclk-lines {
+			qcom,pins = <&gp 25>;
+			qcom,num-grp-pins = <1>;
+			qcom,pin-func = <2>;
+			label = "quin-mi2s-mclk-lines";
+			quin_mi2s_mclk_act: quin_mi2s_mclk_on {
+				drive-strength = <8>;
+			};
+
+			quin_mi2s_mclk_sus: quin_mi2s_mclk_off {
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+
+		quin-mi2s-sclk-lines {
+			qcom,pins = <&gp 91>;
+			qcom,num-grp-pins = <1>;
+			qcom,pin-func = <1>;
+			label = "quin-mi2s-sclk-lines";
+			quin_mi2s_sclk_act: quin_mi2s_sclk_on {
+				drive-strength = <8>;
+			};
+
+			quin_mi2s_sclk_sus: quin_mi2s_sclk_off {
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+
+		quin-mi2s-ws-data-lines {
+			qcom,pins = <&gp 92>, <&gp 93>;
+			qcom,num-grp-pins = <2>;
+			qcom,pin-func = <3>;
+			label = "quin-mi2s-ws-data-lines";
+			quin_mi2s_ws_data_act: quin_mi2s_ws_data_on {
+				drive-strength = <8>;
+			};
+
+			quin_mi2s_ws_data_sus: quin_mi2s_ws_data_off {
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+
+		quat-mi2s-lines {
+			qcom,pins = <&gp 8>, <&gp 9>, <&gp 12>, <&gp 13>;
+			qcom,num-grp-pins = <4>;
+			qcom,pin-func = <3>;
+			label = "quat-mi2s-lines";
+			quat_mi2s_lines_act: quat_mi2s_lines_on {
+				drive-strength = <8>;
+			};
+
+			quat_mi2s_lines_sus: quat_mi2s_lines_off {
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+
 		cross-conn-det {
 			qcom,pins = <&gp 63>;
 			qcom,num-grp-pins = <1>;
@@ -355,32 +415,7 @@
 			};
 		};
 
-		cci1_active {
-			/* CLK, DATA */
-			qcom,pins = <&gp 31>, <&gp 32>;
-			qcom,num-grp-pins = <2>;
-			qcom,pin-func = <1>;
-			label = "cci1-active";
-			/* active state */
-			cci1_active: cci1_active {
-				drive-strength = <2>; /* 2 MA */
-				bias-disable; /* No PULL */
-			};
-		};
-
-		cci1_suspend {
-			/* CLK, DATA */
-			qcom,pins = <&gp 31>, <&gp 32>;
-			qcom,num-grp-pins = <2>;
-			qcom,pin-func = <0>;
-			label = "cci1-suspend";
-			/*suspended state */
-			cci1_suspend: cci1_suspend {
-				drive-strength = <2>; /* 2 MA */
-				bias-disable; /* No PULL */
-			};
-		};
-
+/*modified by xiaoming.hu@tcl.com for conflict borad id gpio 32 and our project does not use this two pin*/
 		pmx_mdss: pmx_mdss {
 			label = "mdss-pins";
 			qcom,pin-func = <0>;
@@ -1450,9 +1485,9 @@
 		};
 
 		tlmm_gpio_key {
-			qcom,pins = <&gp 85>, <&gp 86>, <&gp 87>;
+			qcom,pins = <&gp 62>, <&gp 85>, <&gp 86>, <&gp 87>;/*sun zhangyang modify for boomkey,2015.9.23*/
 			qcom,pin-func = <0>;
-			qcom,num-grp-pins = <3>;
+			qcom,num-grp-pins = <4>;/*sun zhangyang modify for boomkey,2015.9.23*/
 			label = "tlmm_gpio_key";
 			gpio_key_active: gpio_key_active {
 				drive-strength = <2>;
@@ -1464,6 +1499,104 @@
 			};
 		};
 
+		/*[FEATURE]-Add-BEGIN by TCTSH.Cedar, 526254, 2015/09/23, add HALL for Idol455*/
+		hall_int_pin {
+			qcom,pins = <&gp 46>, <&gp 97>;
+			qcom,pin-func = <0>;
+			qcom,num-grp-pins = <2>;
+			label = "hall_int_pin";
+			hall_default: hall_default {
+				drive-strength = <2>;
+				bias-pull-up;
+			};
+		};
+		/*[FEATURE]-Add-END   by TCTSH.Cedar, 526254, 2015/09/23, add HALL for Idol455*/
+
+		 /*[BUG]-Add-START   by TCTSH.YK, 1097898 , 2015/12/10, The audio can not heard from headset
+		 bias-disable means no pull-up and pull-down ,active and suspend should be pull-up or pull-down
+		 */
+		/*pinctl for akm, ak4375*/
+		ak4376_dac_pdn_active {
+			qcom,pins = <&gp 126>;
+			qcom,pin-func = <0>;
+			qcom,num-grp-pins = <1>;
+			label = "ak4376_dac_pdn_active";
+
+			dac_pdn_active: dac_pdn_active {
+				drive-strength = <6>;
+			    bias-pull-up;
+			};
+		};
+
+		ak4376_dac_pdn_suspend {
+			qcom,pins = <&gp 126>;
+			qcom,pin-func = <0>;
+			qcom,num-grp-pins = <1>;
+			label = "ak4376_dac_pdn_suspend";
+
+			dac_pdn_suspend: dac_pdn_suspend {
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+
+		ak4376_dac_ldo_ctl_active {
+			qcom,pins = <&gp 2>;
+			qcom,pin-func = <0>;
+			qcom,num-grp-pins = <1>;
+			label = "ak4376_dac_ldo_ctl_active";
+
+			dac_ldo_ctl_active: dac_ldo_ctl_active {
+				drive-strength = <16>;
+				bias-pull-up;
+			};
+		};
+
+		ak4376_dac_ldo_ctl_suspend {
+			qcom,pins = <&gp 2>;
+			qcom,pin-func = <0>;
+			qcom,num-grp-pins = <1>;
+			label = "ak4376_dac_ldo_ctl_suspend";
+
+			dac_ldo_ctl_suspend: dac_ldo_ctl_suspend  {
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+	 /*[BUG]-Add-End   by TCTSH.YK, 1097898 , 2015/12/10, The audio can not heard from headset*/
+
+		nxp9890_spk_rcv_switch {
+			qcom,pins = <&gp 94>, <&gp 47>;
+			qcom,pin-func = <0>;
+			qcom,num-grp-pins = <2>;
+			label = "nxp9890_spk_rcv_switch";
+			nxp9890_spk_rcv_active: nxp9890_spk_rcv_active {
+				drive-strength = <2>;
+				bias-pull-up;
+			};
+			nxp9890_spk_rcv_suspend: nxp9890_spk_rcv_suspend {
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+
+		/*[FEATURE]-Add-BEGIN by TCTSH.Cedar, 526254, 2015/10/23, add pinctrl for reset pin*/
+		nxp9890_rst {
+			qcom,pins = <&gp 68>;
+			qcom,pin-func = <0>;
+			qcom,num-grp-pins = <1>;
+			label = "nxp9890_rst";
+			nxp9890_rst_active: nxp9890_rst_active {
+				drive-strength = <2>;
+				bias-pull-up;
+			};
+			nxp9890_rst_suspend: nxp9890_rst_suspend {
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+		/*[FEATURE]-Add-END   by TCTSH.Cedar, 526254, 2015/10/23, add pinctrl for reset pin*/
+
 		usb_c_intn_pin {
 			qcom,pins = <&gp 93>, <&gp 133>;
 			qcom,num-grp-pins = <2>;
@@ -1474,5 +1607,51 @@
 				bias-pull-up;		/* PULL UP*/
 			};
 		};
+
+		/* [PLATFORM]-Add-BEGIN by TCTSH.FanJianjun, 2015/11/18, config sim det gpios to make sd card det voltage is right, task:884456 */
+		sim_gpio_config {
+			qcom,pins = <&gp 54>,<&gp 58>;
+			qcom,num-grp-pins = <2>;
+			qcom,pin-func = <1>;
+			label = "simcard_det_pins";
+			simcard_det_pins_default: default {
+				drive-strength = <2>; /* 2 MA */
+				bias-disable;
+			};
+		};
+		/* [PLATFORM]-Add-END by TCTSH.FanJianjun */
+
+           //sun zhangyang add for defect1123769, begin
+                boardid0_config {
+			qcom,pins = <&gp 32>;
+			qcom,num-grp-pins = <1>;
+			qcom,pin-func = <0>;
+			label = "boardid0_config";
+			boardid0_config: boardid0_config {
+				drive-strength = <16>;
+				bias-disable;
+			};
+		};
+                boardid1_config {
+			qcom,pins = <&gp 132>;
+			qcom,num-grp-pins = <1>;
+			qcom,pin-func = <0>;
+			label = "boardid1_config";
+			boardid1_config: boardid1_config {
+				drive-strength = <16>;
+				bias-disable;
+			};
+		};
+                boardid2_config {
+			qcom,pins = <&gp 23>;
+			qcom,num-grp-pins = <1>;
+			qcom,pin-func = <0>;
+			label = "boardid2_config";
+			boardid2_config: boardid2_config {
+				drive-strength = <16>;
+				bias-disable;
+			};
+		};
+           //sun zhangyang add for defect1123769, end
 	};
 };

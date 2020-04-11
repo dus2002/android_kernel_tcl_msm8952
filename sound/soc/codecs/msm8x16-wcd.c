@@ -92,6 +92,13 @@ enum {
 	BYPASS_ALWAYS,
 	BOOST_ON_FOREVER,
 };
+/*[983752]-Add-Begin by TCTSH@YK, 2015/12/04, To compatible with Iphone headset*/
+enum{
+	TCT_MICBISA2_DISABLE=0,
+	TCT_MICBISA2_ENABLE,
+};
+int  micbias2_en;
+/*[983752]-Add-End by TCTSH@YK, 2015/12/04, To compatible with Iphone headset*/
 
 #define EAR_PMD 0
 #define EAR_PMU 1
@@ -254,7 +261,7 @@ static struct wcd_mbhc_register
 			  MSM8X16_WCD_A_ANALOG_MBHC_ZDET_ELECT_RESULT,
 			  0x10, 4, 0),
 	WCD_MBHC_REGISTER("WCD_MBHC_MOISTURE_VREF",
-			  0, 0, 0, 0),
+			  0, 0, 0, 0), /*TCT-NB Tianhongwei add for FR 916071.This reg not use in codec 8x16*/
 	WCD_MBHC_REGISTER("WCD_MBHC_PULLDOWN_CTRL",
 			  MSM8X16_WCD_A_ANALOG_MICB_2_EN, 0x20, 5, 0),
 };
@@ -299,7 +306,9 @@ static void msm8x16_wcd_configure_cap(struct snd_soc_codec *codec,
 		bool micbias1, bool micbias2);
 static void msm8x16_skip_imped_detect(struct snd_soc_codec *codec);
 static bool msm8x16_wcd_use_mb(struct snd_soc_codec *codec);
-
+/*[983752]-Add-Begin by TCTSH@YK, 2015/12/04, To compatible with Iphone headset*/
+static void msm8x16_wcd_mbhc_micb_2V7_ctrl(struct snd_soc_codec *codec,bool en);
+/*[983752]-Add-End by TCTSH@YK, 2015/12/04, To compatible with Iphone headset*/
 struct msm8x16_wcd_spmi msm8x16_wcd_modules[MAX_MSM8X16_WCD_DEVICE];
 
 static void *adsp_state_notifier;
@@ -985,6 +994,9 @@ static const struct wcd_mbhc_cb mbhc_cb = {
 	.micbias_enable_status = msm8x16_wcd_micb_en_status,
 	.mbhc_bias = msm8x16_wcd_enable_master_bias,
 	.mbhc_common_micb_ctrl = msm8x16_wcd_mbhc_common_micb_ctrl,
+	/*[983752]-Add-Begin by TCTSH@YK, 2015/12/04, To be compatible with Iphone headset*/
+	.mbhc_micb2_2v7_ctrl= msm8x16_wcd_mbhc_micb_2V7_ctrl,
+	 /*[983752]-Add-End by TCTSH@YK, 2015/12/04, To be compatible with Iphone headset*/
 	.micb_internal = msm8x16_wcd_mbhc_internal_micbias_ctrl,
 	.hph_pa_on_status = msm8x16_wcd_mbhc_hph_pa_on_status,
 	.set_btn_thr = msm8x16_wcd_mbhc_program_btn_thr,
@@ -2087,6 +2099,42 @@ static int msm8x16_wcd_pa_gain_put(struct snd_kcontrol *kcontrol,
 			    0x20, ear_pa_gain);
 	return 0;
 }
+/*[983752]-Add-Begin by TCTSH@YK, 2015/12/04, To be compatible with Iphone headset*/
+static int msm8x16_wcd_micbias2_2V7_get(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+       struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+
+	dev_dbg(codec->dev, "%s: ucontrol->value.integer.value[0] = %ld\n",
+		__func__, ucontrol->value.integer.value[0]);
+	/*do nothing*/
+	return 0;
+}
+static int msm8x16_wcd_micbias2_2V7_set(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+
+	dev_dbg(codec->dev, "%s: ucontrol->value.integer.value[0] = %ld\n",
+		__func__, ucontrol->value.integer.value[0]);
+
+	switch (ucontrol->value.integer.value[0]) {
+	case 0:
+		micbias2_en=TCT_MICBISA2_DISABLE;
+		 pr_debug("\n %s: micbias_en= %d\n", __func__, micbias2_en);
+		break;
+	case 1:
+		micbias2_en=TCT_MICBISA2_ENABLE;
+		 pr_debug("\n %s: micbias_en= %d\n", __func__, micbias2_en);
+		break;
+	default:
+		pr_err("%s: invalid  option: %d\n", __func__,micbias2_en);
+		return -EINVAL;
+	}
+	return 0;
+}
+/*[983752]-Add-End by TCTSH@YK, 2015/12/04, To compatible with Iphone headset*/
+
 
 
 static int msm8x16_wcd_boost_option_get(struct snd_kcontrol *kcontrol,
@@ -2465,6 +2513,16 @@ static const struct soc_enum msm8x16_wcd_ext_spk_boost_ctl_enum[] = {
 		SOC_ENUM_SINGLE_EXT(2, msm8x16_wcd_ext_spk_boost_ctrl_text),
 };
 
+/*[983752]-Add-Begin by TCTSH@YK, 2015/12/04, To compatible with Iphone headset*/
+static const char * const msm8x16_wcd_micbias2_2V7_text[] = {
+	       "DISABLE", "ENABLE"
+};
+static const struct soc_enum msm8x16_wcd_micbias2_2V7_enum[] = {
+		SOC_ENUM_SINGLE_EXT(2, msm8x16_wcd_micbias2_2V7_text),
+};
+/*[983752]-Add-End by TCTSH@YK, 2015/12/04, To compatible with Iphone headset*/
+
+
 /*cut of frequency for high pass filter*/
 static const char * const cf_text[] = {
 	"MIN_3DB_4Hz", "MIN_3DB_75Hz", "MIN_3DB_150Hz"
@@ -2504,6 +2562,13 @@ static const struct snd_kcontrol_new msm8x16_wcd_snd_controls[] = {
 
 	SOC_ENUM_EXT("LOOPBACK Mode", msm8x16_wcd_loopback_mode_ctl_enum[0],
 		msm8x16_wcd_loopback_mode_get, msm8x16_wcd_loopback_mode_put),
+
+	/*[983752]-Add-Begin by TCTSH@YK, 2015/12/04, To compatible with Iphone headset*/
+
+	SOC_ENUM_EXT("TCT MICBIAS2 2V7", msm8x16_wcd_micbias2_2V7_enum[0],
+		msm8x16_wcd_micbias2_2V7_get, msm8x16_wcd_micbias2_2V7_set),
+
+	/*[983752]-Add-End by TCTSH@YK, 2015/12/04, To compatible with Iphone headset*/
 
 	SOC_SINGLE_TLV("ADC1 Volume", MSM8X16_WCD_A_ANALOG_TX_1_EN, 3,
 					8, 0, analog_gain),
@@ -3465,6 +3530,29 @@ static int msm8x16_wcd_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 		} else if (strnstr(w->name, internal3_text, strlen(w->name))) {
 			snd_soc_update_bits(codec, micb_int_reg, 0x2, 0x2);
 		}
+		/*[Defect]-Add-BEGIN by TCTSH.Cedar, 1170599 2016/1/28, porting qualcomm patch to solve main mic burst noise*/
+		#ifdef CONFIG_TCT_8X76_IDOL4
+		/*
+		* Following is only necessary for msmthorium external bias.
+		* External bias2 for headset doesn't need the change.
+		*/
+		else if (!strnstr(w->name, external2_text, strlen(w->name)) &&
+					strnstr(w->name, external_text,strlen(w->name))) {
+			/*
+			if (strnstr(codec->component.card->name, "8937",strlen(codec->component.card->name)) ||
+				!strcmp(codec->component.card->name,"msm8952-sku1-snd-card") ||
+				!strcmp(codec->component.card->name,"msm8952-sku2-snd-card")) {
+			*/
+				snd_soc_update_bits(codec,
+						 MSM8X16_WCD_A_ANALOG_MICB_1_INT_RBIAS,
+						 0x40, 0x00);
+				snd_soc_update_bits(codec,
+						 MSM8X16_WCD_A_ANALOG_TX_1_2_ATEST_CTL_2,
+						 0x02, 0x02);
+			//}
+		}
+		#endif
+		/*[Defect]-Add-END   by TCTSH.Cedar, 1170599 2016/1/28, porting qualcomm patch to solve main mic burst noise*/
 		if (!strnstr(w->name, external_text, strlen(w->name)))
 			snd_soc_update_bits(codec,
 				MSM8X16_WCD_A_ANALOG_MICB_1_EN, 0x05, 0x04);
@@ -5318,6 +5406,20 @@ void msm8x16_wcd_hs_detect_exit(struct snd_soc_codec *codec)
 }
 EXPORT_SYMBOL(msm8x16_wcd_hs_detect_exit);
 
+
+/*[983752]-Add-Begin by TCTSH@YK, 2015/12/04, To be compatible with Iphone headset*/
+static void msm8x16_wcd_mbhc_micb_2V7_ctrl(struct snd_soc_codec *codec,bool en)
+{
+
+    /*See 80-NK808-2X page 1025 about 0x141,up to 2v15 and normal to 1v75*/
+    pr_debug("\n %s: micbias_en= %d\n", __func__, en);
+    if(en)
+	snd_soc_write(codec, MSM8X16_WCD_A_ANALOG_MICB_1_VAL, 0xb0);
+    else
+	snd_soc_write(codec, MSM8X16_WCD_A_ANALOG_MICB_1_VAL, 0x20);
+}
+/*[983752]-Add-End by TCTSH@YK, 2015/12/04, To be compatible with Iphone headset*/
+
 static void msm8x16_wcd_set_micb_v(struct snd_soc_codec *codec)
 {
 
@@ -5488,9 +5590,18 @@ static int msm8x16_wcd_codec_probe(struct snd_soc_codec *codec)
 		return ret;
 	}
 
+/*[BUGFIX]-Add-BEGIN by TCTNB.bin.su,12/03/2015,Task850685,macro optimization.*/
+//Begin for MBHC, more identification precision, by Kun.Guan & Xing.Wang, 2015-08-26
+#if defined(CONFIG_TCT_8X76_COMMON)
 	wcd_mbhc_init(&msm8x16_wcd_priv->mbhc, codec, &mbhc_cb, &intr_ids,
-		      wcd_mbhc_registers, true);
+                     wcd_mbhc_registers, false);
+#else
 
+	wcd_mbhc_init(&msm8x16_wcd_priv->mbhc, codec, &mbhc_cb, &intr_ids,
+                     wcd_mbhc_registers, true);
+#endif
+//End for MBHC, more identification precision, by Kun.Guan & Xing.Wang, 2015-08-26
+/*[BUGFIX]-Add-END by TCTNB.bin.su,12/03/2015,Task850685,macro optimization.*/
 	msm8x16_wcd_priv->mclk_enabled = false;
 	msm8x16_wcd_priv->clock_active = false;
 	msm8x16_wcd_priv->config_mode_active = false;

@@ -24,6 +24,22 @@ config LEDS_CLASS
 
 comment "LED drivers"
 
+#sun zhangyang add for idol455 sn3191 led begin, defect957994, 2015.11.30
+config TCT_8x76_IDOL455_SN3191
+	tristate "LED driver for sn3191"
+	depends on LEDS_CLASS
+	depends on I2C
+	help
+	  This option enables support for LED driver for sn3191.
+#sun zhangyang add for idol455 sn3191 led end, defect957994, 2015.11.30
+
+config TCT_8x76_IDOL455_SN3196
+	tristate "LED driver for sn3196"
+	depends on LEDS_CLASS
+	depends on I2C
+	help
+	  This option enables support for LED driver for sn3196.
+
 config LEDS_88PM860X
 	tristate "LED Support for Marvell 88PM860x PMIC"
 	depends on LEDS_CLASS
@@ -307,6 +323,26 @@ config LEDS_QPNP_FLASH
 	  To compile this driver as a module, choose M here: the module will
 	  be called leds-qpnp-flash.
 
+config TCT_8x76_IDOL4_FRONT_LED 
+	tristate "Support for TCT Flash LEDs"
+	depends on SPMI && OF_SPMI
+	help
+	  This driver supports the leds functionality of TCT
+	  PNP PMIC.  It includes Flash Led.
+
+	  To compile this driver as a module, choose M here: the module will
+	  be called front_flash.
+
+config TCT_8x76_IDOL4S_FRONT_LED
+	tristate "Support for TCT Flash LEDs"
+	depends on SPMI && OF_SPMI
+	help
+	  This driver supports the leds functionality of TCT
+	  PNP PMIC.  It includes Flash Led.
+
+	  To compile this driver as a module, choose M here: the module will
+	  be called front_flash.
+
 config LEDS_QPNP_WLED
 	tristate "Support for QPNP WLED"
 	depends on SPMI && OF_SPMI
@@ -524,7 +560,15 @@ config LEDS_AW2013
 	help
 	  This option enables support for the AW2013 RGB LED connected
 	  through I2C. Say Y to enable support for the AW2013 LED.
-
+#[PLATFORM]-Add-BEGIN by TCTNB.XQJ, RR-526565, 2015/11/05, add sn31 for idol4s global
+config LEDS_SN31XX
+	tristate "LED driver for SN31XX RGB LED"
+	depends on LEDS_CLASS
+	depends on I2C
+	help
+		This option enables support for SN319XX GU RGB LED driver chips
+		accessed via the I2C bus.
+# [PLATFORM]-Add-END by TCTNB.XQJ
 comment "LED Triggers"
 source "drivers/leds/trigger/Kconfig"
 

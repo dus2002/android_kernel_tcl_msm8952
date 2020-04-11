@@ -72,6 +72,8 @@ Optional properties:
 				  should be in mA. This property is not needed if PMIC is older
 				  than PMI8994v2.0.
 - qcom,pmic-revid		: Revid source for flash LED.
+- qcom,max_current_1500	: Boolean type. This enables driver to limit maximum current to
+			1500 mA, for flash LED.
 
 Required properties inside child node. Child node contains settings for each individual LED.
 Each LED hardware needs a node for itself and a switch node to control brightness.

@@ -234,6 +234,12 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(safety_timer_expired),
 	POWER_SUPPLY_ATTR(restricted_charging),
 	POWER_SUPPLY_ATTR(allow_hvdcp3),
+	//sun zhangyang add for task 1133932 begin
+#if defined(CONFIG_TCT_8X76_IDOL4)
+        POWER_SUPPLY_ATTR(tcl_fixtemp),
+        POWER_SUPPLY_ATTR(tcl_fixcapacity),
+#endif
+	//sun zhangyang add for task 1133932 end
 	/* Local extensions of type int64_t */
 	POWER_SUPPLY_ATTR(charge_counter_ext),
 	/* Properties of type `const char *' */

@@ -148,7 +148,8 @@
 			gpio@c000 {
 				reg = <0xc000 0x100>;
 				qcom,pin-num = <1>;
-				status = "disabled";
+				/*xiaoming.hu@tcl.com for front led*/
+				status = "okay";
 			};
 
 			gpio@c100 {
@@ -199,20 +200,32 @@
 			#size-cells = <1>;
 
 			qcom,iterm-ma = <100>;
-			qcom,float-voltage-mv = <4200>;
+			qcom,float-voltage-mv = <4400>;//4200->4400
 			qcom,resume-delta-mv = <200>;
 			qcom,chg-inhibit-fg;
 			qcom,rparasitic-uohm = <100000>;
 			qcom,bms-psy-name = "bms";
-			qcom,thermal-mitigation = <1500 700 600 0>;
-			qcom,parallel-usb-min-current-ma = <1400>;
-			qcom,parallel-usb-9v-min-current-ma = <900>;
-			qcom,parallel-allowed-lowering-ma = <500>;
+			qcom,thermal-mitigation = <2000 1500 1000 0>;//SZY MODIFY FOR DEFECT1871743, 2016.03.29
+               //sun zhangyang modify charging parameters based on HW, defect1058536, begin
+                        qcom,fastchg-current-ma = <2000>;
+			//qcom,parallel-usb-min-current-ma = <1400>;
+			//qcom,parallel-usb-9v-min-current-ma = <900>;
+			//qcom,parallel-allowed-lowering-ma = <500>;
+               //sun zhangyang modify charging parameters based on HW, defect1058536, end
 			qcom,autoadjust-vfloat;
 			qcom,pmic-revid = <&pmi8950_revid>;
-			qcom,charge-unknown-battery;
-			qcom,force-aicl-rerun;
-			qcom,aicl-rerun-period-s = <180>;
+			//qcom,charge-unknown-battery;//sun zhangyang modify for display real capacity,2015.10.22
+                       /*[BUG] MODFIFY-BEGIN BY SZY,2016.03.14, DEFECT1717156*/
+			//qcom,force-aicl-rerun;
+			//qcom,aicl-rerun-period-s = <180>;
+                       /*[BUG] MODFIFY-BEGIN BY SZY,2016.03.14, DEFECT1717156*/
+                        qcom,charging-timeout-mins = <0>;//sun zhangyang add for charging no timeout, task1238455.
+
+/*[FEATURE]-BEGIN, SZY MODIFY FOR DEFECT1871743, 2016.03.29*/
+                        qcom,jeita-temp-hard-limit = <1>;
+                        qcom,fastchg-current-comp = <900>;
+			qcom,float-voltage-comp = <16>;
+/*[FEATURE]-END, SZY MODIFY FOR DEFECT1871743, 2016.03.29*/
 
 			qcom,chgr@1000 {
 				reg = <0x1000 0x100>;
@@ -310,17 +323,28 @@
 			compatible = "qcom,qpnp-fg";
 			#address-cells = <1>;
 			#size-cells = <1>;
-			qcom,resume-soc = <95>;
+			/* [FEATURE]-MOD-BEGIN TCTSH.SZY,2/18/2016,PR1623721 */
+                        qcom,resume-soc-raw = <0xFD>;
+                        /* [FEATURE]-MOD-END TCTSH.TCTSH.SZY,2/18/2016,1623721 */
 			status = "okay";
-			qcom,bcl-lm-threshold-ma = <127>;
-			qcom,bcl-mh-threshold-ma = <405>;
+			qcom,bcl-lm-threshold-ma = <127>;//sun zhangyang modify charging parameters based on HW, defect1058536
+			qcom,bcl-mh-threshold-ma = <405>;//sun zhangyang modify charging parameters based on HW, defect1058536
 			qcom,fg-iterm-ma = <150>;
 			qcom,fg-chg-iterm-ma = <100>;
 			qcom,pmic-revid = <&pmi8950_revid>;
 			qcom,cycle-counter-en;
 			qcom,capacity-learning-on;
-			qcom,fg-cutoff-voltage-mv = <3500>;
-
+			qcom,fg-cutoff-voltage-mv = <3400>;//sun zhangyang modify charging parameters based on HW, defect1058536
+                  /*sun zhangyang add for temporary charging begin,2015.9.22*/
+			qcom,warm-bat-decidegc = <450>;
+			qcom,cool-bat-decidegc = <100>;
+			qcom,hot-bat-decidegc =  <550>;
+			qcom,cold-bat-decidegc = <0>;
+			qcom,ext-sense-type;
+			qcom,thermal-coefficients = [c2 86 bb 50 cf 37];
+                 /*sun zhangyang add for temporary charging end,2015.9.22*/
+                        qcom,vbat-estimate-diff-mv = <200>;//[PLATFORM]-MOD by TCTSH.SUN ZHANGYANG, FR1283231 , 2016/01/04
+                        qcom,cold-hot-jeita-hysteresis = <20 30>;//[FEATURE]-ADD by TCTSH.SZY,12/01/2016,defect1163023,task528855
 			qcom,fg-soc@4000 {
 			status = "okay";
 				reg = <0x4000 0x100>;
@@ -412,7 +436,7 @@
 		#size-cells = <1>;
 
 		pmi8950_pwm: pwm@b000 {
-			status = "disabled";
+			status = "ok";
 			compatible = "qcom,qpnp-pwm";
 			reg = <0xb000 0x100>;
 			reg-names = "qpnp-lpg-channel-base";
@@ -491,7 +515,6 @@
 				qcom,qpnp-lab-pfet-size = <100>;
 				qcom,qpnp-lab-max-precharge-time = <300>;
 			};
-
 		};
 
 		qcom,leds@d800 {
@@ -520,7 +543,7 @@
 			qcom,dim-method = "linear";
 			qcom,hyb-thres = <625>;
 			qcom,sync-dly-us = <800>;
-			qcom,fs-curr-ua = <30000>;
+			qcom,fs-curr-ua = <20000>;//fix 553572 by jhyu set from 30ma to 20 ma
 			qcom,en-phase-stag;
 			qcom,ibb-pwrup-dly = <8>;
 			qcom,led-strings-list = [00 01];
@@ -617,7 +640,7 @@
 			qcom,wave-play-rate-us = <5263>;
 			qcom,actuator-type = "erm";
 			qcom,wave-shape = "square";
-			qcom,vmax-mv = <2000>;
+			qcom,vmax-mv = <3300>;/*[Defect]-Modified by TCTSH.Cedar, 987643, 2015/12/24, set voltage to be consistent with BVM0827H-X9-U*/
 			qcom,ilim-ma = <800>;
 			qcom,sc-deb-cycles = <8>;
 			qcom,int-pwm-freq-khz = <505>;

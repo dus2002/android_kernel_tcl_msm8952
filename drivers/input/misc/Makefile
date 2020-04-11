@@ -89,3 +89,6 @@ endif
 
 obj-$(CONFIG_SENSORS_MC3430)	+= mc3xxx.o
 obj-$(CONFIG_SENSORS_ISL29044A)	+= isl29044a.o
+# [FEATURE]-Add-BEGIN by TCTNB.QW, 526575, 2015/09/02, add HALL for Idol4_pro
+obj-$(CONFIG_SENSORS_HALL) 		+= hall.o
+# [FEATURE]-Add-END   by TCTNB.Cedar, 526575, 2015/09/02, add HALL for Idol4_pro

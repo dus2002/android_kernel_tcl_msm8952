@@ -1678,6 +1678,7 @@ void input_reset_device(struct input_dev *dev)
 EXPORT_SYMBOL(input_reset_device);
 
 #ifdef CONFIG_PM
+static bool gpio_key_input_dev_status =1;/*TCT-NB Tianhongwei modify for defect.1749099*/
 static int input_dev_suspend(struct device *dev)
 {
 	struct input_dev *input_dev = to_input_dev(dev);
@@ -1688,7 +1689,12 @@ static int input_dev_suspend(struct device *dev)
 		input_dev_toggle(input_dev, false);
 
 	mutex_unlock(&input_dev->mutex);
-
+/*TCT-NB Tianhongwei modify for defect.1749099*/
+	if(!strcmp(input_dev->name,"gpio-keys"))
+	{
+		gpio_key_input_dev_status = 0;
+	}
+/*TCT-NB Tianhongwei modify end*/
 	return 0;
 }
 
@@ -1697,10 +1703,22 @@ static int input_dev_resume(struct device *dev)
 	struct input_dev *input_dev = to_input_dev(dev);
 
 	input_reset_device(input_dev);
-
+/*TCT-NB Tianhongwei modify for defect.1749099*/
+	if(!strcmp(input_dev->name,"gpio-keys"))
+	{
+		gpio_key_input_dev_status = 1;
+	}
+/*TCT-NB Tianhongwei modify end*/
 	return 0;
 }
-
+/*TCT-NB Tianhongwei modify for defect.1749099*/
+bool is_input_dev_resume(void)
+{
+       printk(KERN_ERR"gpio_key_input_dev_status = %d \n",gpio_key_input_dev_status);
+	return gpio_key_input_dev_status;
+}
+EXPORT_SYMBOL(is_input_dev_resume);
+/*TCT-NB Tianhongwei modify end*/
 static const struct dev_pm_ops input_dev_pm_ops = {
 	.suspend	= input_dev_suspend,
 	.resume		= input_dev_resume,

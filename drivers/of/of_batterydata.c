@@ -309,7 +309,116 @@ static int64_t of_batterydata_convert_battery_id_kohm(int batt_id_uv,
 
 	return resistor_value_kohm;
 }
+/*[BUG]-BEGIN, SZY MODIFY FOR DEFECT 1876502, 2016.03.30*/
+#if defined(CONFIG_TCT_8X76_IDOL4)
+struct device_node *of_batterydata_get_best_profile(
+		const struct device_node *batterydata_container_node,
+		const char *psy_name,  const char  *batt_type)
+{
+	struct batt_ids batt_ids;
+	struct device_node *node, *best_node = NULL;
+	struct power_supply *psy;
+	const char *battery_type = NULL;
+	union power_supply_propval ret = {0, };
+	int delta = 0, best_delta = 0, best_id = 0, id_range_pct,
+		batt_id = 0, i = 0, rc = 0, limit = 0;
+	bool in_range = false;
 
+	psy = power_supply_get_by_name(psy_name);
+	if (!psy) {
+		pr_err("%s supply not found. defer\n", psy_name);
+		return ERR_PTR(-EPROBE_DEFER);
+	}
+
+	rc = psy->get_property(psy, POWER_SUPPLY_PROP_RESISTANCE_ID, &ret);
+	if (rc) {
+		pr_err("failed to retrieve resistance value rc=%d\n", rc);
+		return ERR_PTR(-ENOSYS);
+	}
+
+        batt_id = ret.intval;
+
+	/* read battery id range percentage for best profile */
+	rc = of_property_read_u32(batterydata_container_node,
+			"qcom,batt-id-range-pct", &id_range_pct);
+
+	if (rc) {
+		if (rc == -EINVAL) {
+			id_range_pct = 0;
+		} else {
+			pr_err("failed to read battery id range\n");
+			return ERR_PTR(-ENXIO);
+		}
+	}
+
+	/*
+	 * Find the battery data with a battery id resistor closest to this one
+	 */
+	for_each_child_of_node(batterydata_container_node, node) {
+		if (batt_type != NULL) {
+			rc = of_property_read_string(node, "qcom,battery-type",
+							&battery_type);
+			if (!rc && strcmp(battery_type, batt_type) == 0) {
+				best_node = node;
+				best_id = batt_id;
+				break;
+			}
+		} else {
+			rc = of_batterydata_read_batt_id_kohm(node,
+							"qcom,batt-id-kohm",
+							&batt_ids);
+			if (rc)
+				continue;
+			for (i = 0; i < batt_ids.num; i++) {
+				delta = abs(batt_ids.kohm[i]*1000 - batt_id);
+				limit = (batt_ids.kohm[i] * id_range_pct*1000)/100;
+				in_range = (delta <= limit);
+				/*
+				 * Check if the delta is the lowest one
+				 * and also if the limits are in range
+				 * before selecting the best node.
+				 */
+				if ((delta < best_delta || !best_node)
+					&& in_range) {
+					best_node = node;
+					best_delta = delta;
+					best_id = batt_ids.kohm[i]*1000;
+				}
+			}
+		}
+	}
+
+	if (best_node == NULL) {
+		pr_err("No battery data found,load defaut battery profile.\n");
+		for_each_child_of_node(batterydata_container_node, node)
+		{
+			if(of_property_read_bool(node,"qcom,default-battery-type")){
+				best_node = node;
+				break;
+			}
+		}
+		return best_node;
+	}
+
+	/* check that profile id is in range of the measured batt_id */
+	if (abs(best_id - batt_id) >
+			((best_id * id_range_pct) / 100)) {
+		pr_err("out of range: profile id %d batt id %d pct %d",
+			best_id, batt_id, id_range_pct);
+		return NULL;
+	}
+
+	rc = of_property_read_string(best_node, "qcom,battery-type",
+							&battery_type);
+	if (!rc)
+		pr_info("%s found\n", battery_type);
+	else
+		pr_info("%s found\n", best_node->name);
+
+	return best_node;
+}
+
+#else
 struct device_node *of_batterydata_get_best_profile(
 		const struct device_node *batterydata_container_node,
 		const char *psy_name,  const char  *batt_type)
@@ -389,7 +498,16 @@ struct device_node *of_batterydata_get_best_profile(
 
 	if (best_node == NULL) {
 		pr_err("No battery data found\n");
-		return best_node;
+		#if defined(CONFIG_TCT_8X76_IDOL4S_VDF) || defined(CONFIG_TCT_8X76_IDOL4S)
+		for_each_child_of_node(batterydata_container_node, node)
+		{
+			if(of_property_read_bool(node,"qcom,default-battery-type")){
+				best_node = node;
+				break;
+			}
+		}
+		#endif
+		return best_node;		
 	}
 
 	/* check that profile id is in range of the measured batt_id */
@@ -409,6 +527,8 @@ struct device_node *of_batterydata_get_best_profile(
 
 	return best_node;
 }
+#endif
+/*[BUG]-END, SZY MODIFY FOR DEFECT 1876502, 2016.03.30*/
 
 int of_batterydata_read_data(struct device_node *batterydata_container_node,
 				struct bms_battery_data *batt_data,

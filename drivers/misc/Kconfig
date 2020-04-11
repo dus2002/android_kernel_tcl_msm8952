@@ -655,4 +655,7 @@ source "drivers/misc/altera-stapl/Kconfig"
 source "drivers/misc/mei/Kconfig"
 source "drivers/misc/vmw_vmci/Kconfig"
 source "drivers/misc/qcom/Kconfig"
+#[FEATURE]-MOD-BEGIN TCTNB.Bin.Su,10/20/2015,526539
+source "drivers/misc/vfsSpi/Kconfig"
+#[FEATURE]-MOD-END TCTNB.Bin.Su,10/20/2015,526539
 endmenu

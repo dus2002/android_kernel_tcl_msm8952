@@ -22,7 +22,7 @@
 	interrupt-parent = <&intc>;
 
 	chosen {
-		bootargs = "boot_cpus=0,4,5,6,7 sched_enable_hmp=1";
+		bootargs = "boot_cpus=0,1,2,3,4,5,6,7 sched_enable_hmp=1";
 	};
 
 	aliases {
@@ -82,7 +82,15 @@
 			reg = <0 0 0 0x1000000>;
 			label = "qseecom_mem";
 		};
-
+/*add by tcl-gtguo for pstore task-528826*/
+		pstore_reserve_mem: pstore_reserve_mem_region@0 {
+			linux,reserve-contiguous-region;
+			linux,reserve-region;
+			linux,remove-completely;
+			reg = <0x0 0x9ff00000 0x0 0x0200000>;
+			label = "pstore_reserve_mem";
+        	};
+/*end*/
 		cont_splash_mem: splash_region@83000000 {
 			linux,reserve-contiguous-region;
 			linux,reserve-region;
@@ -500,7 +508,7 @@
 
 	qcom,rmtfs_sharedmem@00000000 {
 		compatible = "qcom,sharedmem-uio";
-		reg = <0x00000000 0x00200000>;
+		reg = <0x00000000 0x00200000>;/*0x00180000 enlarge efs ram to 2M*/
 		reg-names = "rmtfs";
 		qcom,client-id = <0x00000001>;
 	};
@@ -638,6 +646,13 @@
 			qcom,sensor-name = "pm8950_tz";
 			qcom,scaling-factor = <1000>;
 		};
+/*[FEATURE]-BEGIN, SZY MODIFY FOR DEFECT1871743, 2016.03.29*/
+		sensor_information17: qcom,sensor-information-17 {
+			qcom,sensor-type = "adc";
+			qcom,sensor-name = "battery";
+			qcom,scaling-factor = <1000>;
+		};
+/*[FEATURE]-END, SZY MODIFY FOR DEFECT1871743, 2016.03.29*/
 	};
 
 	qcom,msm-thermal {
@@ -754,9 +769,9 @@
 		qcom,msm-bus,num-cases = <3>;
 		qcom,msm-bus,num-paths = <1>;
 		qcom,msm-bus,vectors-KBps =
-		<90 512 0 0>,              /* No vote (ab=0 Mbps, ib=0 Mbps – NO BIMC vote) */
-		<90 512 100000 800000>,    /* SVS  - (ab=100Mbps, ib=800Mbps – 50MHz BIMC freq) */
-		<90 512 100000 1200000>;   /* PERF - (ab=100Mbps, ib=1200Mbps – 75MHz BIMC freq) */
+		<90 512 0 0>,              /* No vote (ab=0 Mbps, ib=0 Mbps \96 NO BIMC vote) */
+		<90 512 100000 800000>,    /* SVS  - (ab=100Mbps, ib=800Mbps \96 50MHz BIMC freq) */
+		<90 512 100000 1200000>;   /* PERF - (ab=100Mbps, ib=1200Mbps \96 75MHz BIMC freq) */
 		qcom,bus-vector-names = "MIN", "SVS", "PERF";
 		qcom,tethered-flow-control;
 	};
@@ -1157,7 +1172,8 @@
 		qcom,vdd-voltage-level = <0 1200000 1200000>;
 
 		qcom,hsusb-otg-phy-init-seq =
-			<0x73 0x80 0x68 0x81 0x24 0x82 0xffffffff>;
+			//<0x73 0x80 0x68 0x81 0x24 0x82 0xffffffff>;
+                        <0x74 0x80 0x7f 0x81 0x3c 0x82 0x3f 0x83 0xffffffff>;//syz modify for defect1959211,2016.04.19
 		qcom,hsusb-otg-phy-type = <3>; /* SNPS Femto PHY */
 		qcom,hsusb-otg-mode = <3>; /* OTG mode */
 		qcom,hsusb-otg-otg-control = <2>; /* PMIC */

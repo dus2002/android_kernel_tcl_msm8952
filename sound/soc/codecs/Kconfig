@@ -572,6 +572,38 @@ config SND_SOC_TPA6130A2
 config SND_SOC_MSM_STUB
 	tristate
 
+# [Task]-Modified-BEGIN by TCTSH.Cedar, 1784755, 2016/03/11, idol4 only use ak4375
+config SND_SOC_AK4375
+	bool "idol4 akm ak4375 codec"
+# [Task]-Modified-END   by TCTSH.Cedar, 1784755, 2016/03/11, idol4 only use ak4375
+
+#Begin for akm ak4376 and nxp tfa9890 codec driver, by Kun.Guan & Xing.Wang, 2015-08-26
+config SND_SOC_AK4376
+	bool "idol4 akm ak4376 codec"
+
+config SND_SOC_TFA9890
+	bool "idol4 nxp tfa9890 smartPA"
+#End for akm ak4376 and nxp tfa9890 codec driver, by Kun.Guan & Xing.Wang, 2015-08-26
+
+#Begin for FM, add radio path, by Kun.Guan & Xing.Wang, 2015-08-26
+config SND_TCT_IDOL4_FM
+	bool "idol4 FM function"
+#End for FM, add radio path, by Kun.Guan & Xing.Wang, 2015-08-26
+
+#Begin for QUAT I2S Clock is control by HAL nxp tfa9890, by Kun.Guan & Xing.Wang, 2015-08-26
+config SND_TCT_IDOL4_QUAT_I2S_HAL_CTL
+	bool "idol4 smart pa control Quat I2S Clock"
+#End for QUAT I2S Clock is control by HAL nxp tfa9890, by Kun.Guan & Xing.Wang, 2015-08-26
+
+#TCT-NB Tianhongwei add for idol4s 2015-11-27
+config SND_DYNC_SAMPLE_RATE
+	bool "i2s sample rate set by hall"
+
+config SND_44P1K_SUPPORT
+	bool "support 44.1k playback use slave mode"
+	select SND_DYNC_SAMPLE_RATE
+#TCT-NB Tianhongwei end
+
 config SND_SOC_MSM_HDMI_CODEC_RX
 	bool "HDMI Audio Playback"
 	depends on FB_MSM_MDSS_HDMI_PANEL && (SND_SOC_MSM8974 || SND_SOC_APQ8084 || SND_SOC_MSM8994)

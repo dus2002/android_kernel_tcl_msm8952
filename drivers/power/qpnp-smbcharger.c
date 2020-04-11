@@ -40,6 +40,14 @@
 #include <linux/ktime.h>
 #include "pmic-voter.h"
 
+//sun zhangyang add for task 1133932 begin
+#if defined(CONFIG_TCT_8X76_IDOL4)
+static int fixtemp = 0;
+static bool proto1_check = 0;
+static int fixcapacity = 0;
+#endif
+//sun zhangyang add for task 1133932 end
+
 /* Mask/Bit helpers */
 #define _SMB_MASK(BITS, POS) \
 	((unsigned char)(((1 << (BITS)) - 1) << (POS)))
@@ -191,6 +199,18 @@ struct smbchg_chip {
 	bool				icl_disabled;
 	u32				wa_flags;
 	int				usb_icl_delta;
+	int				vbat_at_uv;
+	int				disable_parallel_uv;
+
+/*MODIFIED-BEGIN by jin.wang, 2016-04-11,BUG-1921545*/
+// [BUG]-ADD-BEGIN TCTNB.WJ,4/9/2016,PR 1912713
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	int				parallel_ctrl_warm;
+	int				parallel_ctrl_cool;
+#endif
+// [BUG]-ADD-END TCTNB.WJ,4/9/2016
+/*MODIFIED-END by jin.wang,BUG-1921545*/
+
 
 	/* jeita and temperature */
 	bool				batt_hot;
@@ -305,6 +325,11 @@ enum print_reason {
 	PR_PM		= BIT(4),
 	PR_MISC		= BIT(5),
 	PR_WIPOWER	= BIT(6),
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/8/2015,1053888
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	PR_NBTCLDBG	= BIT(15),
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/8/2015,1053888
 };
 
 enum wake_reason {
@@ -375,11 +400,17 @@ enum battchg_enable_voters {
 };
 
 static int smbchg_debug_mask;
+
 module_param_named(
 	debug_mask, smbchg_debug_mask, int, S_IRUSR | S_IWUSR
 );
-
+//sun zhangyang modify charging parameters based on HW, defect1058536,begin
+#if defined(CONFIG_TCT_8X76_IDOL4) || defined(CONFIG_TCT_8X76_IDOL455)
+static int smbchg_parallel_en = 0;
+#else
 static int smbchg_parallel_en = 1;
+#endif
+//sun zhangyang modify charging parameters based on HW, defect1058536,end
 module_param_named(
 	parallel_en, smbchg_parallel_en, int, S_IRUSR | S_IWUSR
 );
@@ -395,14 +426,37 @@ module_param_named(
 	main_chg_icl_percent, smbchg_main_chg_icl_percent,
 	int, S_IRUSR | S_IWUSR
 );
-
-static int smbchg_default_hvdcp_icl_ma = 3000;
+//sun zhangyang modify charging parameters based on HW, defect1058536,begin
+#if defined(CONFIG_TCT_8X76_IDOL4) || defined(CONFIG_TCT_8X76_IDOL455)
+static int smbchg_default_hvdcp_icl_ma = 1800;
+#else
+static int smbchg_default_hvdcp_icl_ma = 2002;
+#endif
+//sun zhangyang modify charging parameters based on HW, defect1058536,end
 module_param_named(
 	default_hvdcp_icl_ma, smbchg_default_hvdcp_icl_ma,
 	int, S_IRUSR | S_IWUSR
 );
 
-static int smbchg_default_dcp_icl_ma = 1800;
+// [BUG]-ADD-BEGIN TCTNB.WJ,1/29/2016,PR1507964
+#if defined(CONFIG_TCT_8X76_IDOL4) || defined(CONFIG_TCT_8X76_IDOL455)
+static int smbchg_default_hvdcp3_icl_ma = 1800;
+#else
+static int smbchg_default_hvdcp3_icl_ma = 3000;
+#endif
+module_param_named(
+	default_hvdcp3_icl_ma, smbchg_default_hvdcp3_icl_ma,
+	int, S_IRUSR | S_IWUSR
+);
+// [BUG]-ADD-END TCTNB.WJ,12/3/2015, PR1507964
+
+// [FEATURE]-MOD-BEGIN TCTNB.WJ,12/3/2015, FR536521
+#if defined(CONFIG_TCT_8X76_IDOL4) || defined(CONFIG_TCT_8X76_IDOL455)
+static int smbchg_default_dcp_icl_ma = 2000;  //sun zhangyang modify charging parameters based on HW, defect1058536
+#else
+static int smbchg_default_dcp_icl_ma = 2001; //MODIFIED by jin.wang, 2016-04-09,BUG-1912713
+#endif
+// [FEATURE]-MOD-END TCTNB.WJ,12/3/2015, FR536521
 module_param_named(
 	default_dcp_icl_ma, smbchg_default_dcp_icl_ma,
 	int, S_IRUSR | S_IWUSR
@@ -1099,7 +1153,6 @@ static int find_smaller_in_array(const int *table, int val, int len)
 		if (val >= table[i])
 			break;
 	}
-
 	return i;
 }
 
@@ -1434,7 +1487,13 @@ static void smbchg_usb_update_online_work(struct work_struct *work)
 						USER_EN_VOTER);
 	int online;
 
+// [FEATURE]-MOD-BEGIN TCTNB.WJ,11/27/2015, bug:989062
+#if defined(CONFIG_TCT_8X76_COMMON)//[PLATFORM]-MOD by TCTSH.SUN ZHANGYANG, FR1283231 , 2016/01/04
+	online = user_enabled && chip->usb_present ;
+#else
 	online = user_enabled && chip->usb_present && !chip->very_weak_charger;
+#endif
+// [FEATURE]-MOD-END TCTNB.WJ,11/27/2015, bug:989062
 
 	mutex_lock(&chip->usb_set_online_lock);
 	if (chip->usb_online != online) {
@@ -1790,6 +1849,8 @@ static bool smbchg_is_usbin_active_pwr_src(struct smbchg_chip *chip)
 		&& (reg & USBIN_ACTIVE_PWR_SRC_BIT);
 }
 
+// [BUG]-ADD-BEGIN TCTNB.WJ,2/17/2016,1507964
+#if defined(CONFIG_TCT_8X76_COMMON)
 static void smbchg_detect_parallel_charger(struct smbchg_chip *chip)
 {
 	struct power_supply *parallel_psy = get_parallel_psy(chip);
@@ -1798,7 +1859,11 @@ static void smbchg_detect_parallel_charger(struct smbchg_chip *chip)
 		chip->parallel_charger_detected =
 			power_supply_set_present(parallel_psy, true) ?
 								false : true;
+	else
+		chip->parallel_charger_detected = false;
 }
+#endif
+// [BUG]-ADD-END
 
 static int smbchg_parallel_usb_charging_en(struct smbchg_chip *chip, bool en)
 {
@@ -1921,7 +1986,10 @@ static void smbchg_parallel_usb_taper(struct smbchg_chip *chip)
 	int parallel_fcc_ma, tries = 0;
 	u8 reg = 0;
 
-	smbchg_detect_parallel_charger(chip);
+
+	if (!parallel_psy || !chip->parallel_charger_detected)
+		smbchg_detect_parallel_charger(chip); //MODIFIED by jin.wang, 2016-04-11,BUG-1921545
+
 	if (!chip->parallel_charger_detected)
 		return;
 
@@ -2054,13 +2122,21 @@ static bool smbchg_is_parallel_usb_ok(struct smbchg_chip *chip,
 {
 	struct power_supply *parallel_psy = get_parallel_psy(chip);
 	union power_supply_propval pval = {0, };
-	int min_current_thr_ma, rc, type;
+	int min_current_thr_ma, rc, type, vbat_uv;
 	int total_current_ma, current_limit_ma, parallel_cl_ma;
 	ktime_t kt_since_last_disable;
 	u8 reg;
 	int fcc_ma = get_effective_result_locked(chip->fcc_votable);
 	int fcc_voter_id = get_effective_client_id_locked(chip->fcc_votable);
 	int usb_icl_ma = get_effective_result_locked(chip->usb_icl_votable);
+
+/*MODIFIED-BEGIN by jin.wang, 2016-04-11,BUG-1921545*/
+// [BUG]-ADD-BEGIN TCTNB.WJ,4/9/2016,PR 1912713
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	int batt_temp=150;
+#endif
+// [BUG]-ADD-END TCTNB.WJ,4/9/2016
+/*MODIFIED-END by jin.wang,BUG-1921545*/
 
 	if (!parallel_psy || !smbchg_parallel_en
 			|| !chip->parallel_charger_detected) {
@@ -2109,6 +2185,31 @@ static bool smbchg_is_parallel_usb_ok(struct smbchg_chip *chip,
 	type = get_type(reg);
 	if (get_usb_supply_type(type) == POWER_SUPPLY_TYPE_USB_CDP) {
 		pr_smb(PR_STATUS, "CDP adapter, skipping\n");
+		return false;
+	}
+
+/*MODIFIED-BEGIN by jin.wang, 2016-04-11,BUG-1921545*/
+// [BUG]-ADD-BEGIN TCTNB.WJ,4/9/2016,PR 1912713
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	set_property_on_fg(chip, POWER_SUPPLY_PROP_UPDATE_NOW, 1);
+	msleep(5);
+	batt_temp = get_prop_batt_temp(chip);
+	if( ( batt_temp > chip->parallel_ctrl_warm )
+		|| (batt_temp < chip->parallel_ctrl_cool) ) {
+			pr_smb(PR_STATUS, "battery: %d, skipping\n", batt_temp);
+			return false;
+		}
+#endif
+// [BUG]-ADD-END TCTNB.WJ,4/9/2016
+/*MODIFIED-END by jin.wang,BUG-1921545*/
+
+	vbat_uv = get_prop_batt_voltage_now(chip);
+	if (chip->usb_supply_type == POWER_SUPPLY_TYPE_USB_DCP
+			&& (chip->vbat_at_uv >= chip->disable_parallel_uv
+			|| vbat_uv >= chip->disable_parallel_uv)) {
+		pr_smb(PR_STATUS,
+			"DCP adapter, vbat_at_uv(%d) vbatt (%d) > disable_parallel_uv(%d)\n",
+			chip->vbat_at_uv, vbat_uv, chip->disable_parallel_uv);
 		return false;
 	}
 
@@ -2615,7 +2716,11 @@ static int set_usb_current_limit_vote_cb(struct device *dev,
 
 	/* disable parallel charging if HVDCP is voting for 300mA */
 	if (effective_id == HVDCP_ICL_VOTER)
+	{
+		mutex_lock(&chip->parallel.lock);
 		smbchg_parallel_usb_disable(chip);
+		mutex_unlock(&chip->parallel.lock);
+	}
 
 	if (chip->parallel.current_max_ma == 0) {
 		rc = smbchg_set_usb_current_max(chip, icl_ma);
@@ -2659,6 +2764,13 @@ static int smbchg_system_temp_level_set(struct smbchg_chip *chip,
 		lvl_sel = chip->thermal_levels - 1;
 	}
 
+/* [FEATURE]-ADD-BEGIN TCTNB.WJ,1/13/2016,FR1395487 */
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	printk("system_temp_level: %d, %d\n",
+			chip->therm_lvl_sel, lvl_sel);
+#endif
+/* [FEATURE]-ADD-END TCTNB.WJ */
+
 	if (lvl_sel == chip->therm_lvl_sel)
 		return 0;
 
@@ -2695,11 +2807,26 @@ static int smbchg_system_temp_level_set(struct smbchg_chip *chip,
 		if (rc < 0)
 			pr_err("Couldn't disable DC thermal ICL vote rc=%d\n",
 				rc);
+            /*[FEATURE]-BEGIN, SZY MODIFY FOR DEFECT1928458, 2016.04.09*/
+             #if defined(CONFIG_TCT_8X76_IDOL4)
+                thermal_icl_ma =
+			(int)chip->thermal_mitigation[chip->therm_lvl_sel];
+                rc = vote(chip->fcc_votable, BATT_TYPE_FCC_VOTER, true,
+					thermal_icl_ma);
+             #endif
+            /*[FEATURE]-END, SZY MODIFY FOR DEFECT1928458, 2016.04.09*/
 	} else {
 		thermal_icl_ma =
 			(int)chip->thermal_mitigation[chip->therm_lvl_sel];
+           /*[FEATURE]-BEGIN, SZY MODIFY FOR DEFECT1871743, 2016.03.29*/
+             #if defined(CONFIG_TCT_8X76_IDOL4)
+                rc = vote(chip->fcc_votable, BATT_TYPE_FCC_VOTER, true,
+					thermal_icl_ma);
+             #else
 		rc = vote(chip->usb_icl_votable, THERMAL_ICL_VOTER, true,
 					thermal_icl_ma);
+             #endif
+           /*[FEATURE]-END, SZY MODIFY FOR DEFECT1871743, 2016.03.29*/
 		if (rc < 0)
 			pr_err("Couldn't vote for USB thermal ICL rc=%d\n", rc);
 
@@ -3142,6 +3269,8 @@ static void smbchg_soc_changed(struct smbchg_chip *chip)
 #define AICL_RERUN_ON			(BIT(5) | BIT(4))
 #define AICL_RERUN_OFF			0
 
+#define AICL_INIT_MASK		BIT(7)
+
 static int smbchg_hw_aicl_rerun_en(struct smbchg_chip *chip, bool en)
 {
 	int rc = 0;
@@ -3479,11 +3608,16 @@ static void smbchg_external_power_changed(struct power_supply *psy)
 	if (rc == 0)
 		vote(chip->usb_suspend_votable, POWER_SUPPLY_EN_VOTER,
 				!prop.intval, 0);
-
+       //[TASK]-Add-BEGIN by sun zhangyang,12/30/2015, task:1271765,1271793,begin
+       #ifdef FEATURE_TCT_LED_FLICK_MDOE_TO_CONSTLIGHT_MODE
+            current_limit = 500;
+       #else
 	rc = chip->usb_psy->get_property(chip->usb_psy,
 				POWER_SUPPLY_PROP_CURRENT_MAX, &prop);
 	if (rc == 0)
 		current_limit = prop.intval / 1000;
+       #endif
+       //[TASK]-Add-BEGIN by sun zhangyang,12/30/2015, task:1271765,1271793,end
 
 	read_usb_type(chip, &usb_type_name, &usb_supply_type);
 	if (usb_supply_type != POWER_SUPPLY_TYPE_USB)
@@ -3766,6 +3900,8 @@ static void smbchg_regulator_deinit(struct smbchg_chip *chip)
 #define CHG_LED_SHIFT		1
 static int smbchg_chg_led_controls(struct smbchg_chip *chip)
 {
+    //[TASK]-Add-BEGIN by sun zhangyang,12/30/2015, task:1271765,1271793,begin
+    #ifndef FEATURE_TCT_LED_FLICK_MDOE_TO_CONSTLIGHT_MODE
 	u8 reg, mask;
 	int rc;
 
@@ -3784,6 +3920,10 @@ static int smbchg_chg_led_controls(struct smbchg_chip *chip)
 		dev_err(chip->dev,
 				"Couldn't write LED_CTRL_BIT rc=%d\n", rc);
 	return rc;
+    #else
+        return 0;
+    #endif
+    //[TASK]-Add-BEGIN by sun zhangyang,12/30/2015, task:1271765,1271793,end
 }
 
 static void smbchg_chg_led_brightness_set(struct led_classdev *cdev,
@@ -3807,7 +3947,17 @@ static void smbchg_chg_led_brightness_set(struct led_classdev *cdev,
 		dev_err(chip->dev, "Couldn't write CHG_LED rc=%d\n",
 				rc);
 }
+/* [BUGFIX]-Add-BEGIN by TCTNB.XQJ, RR-526565, 2015/11/13, forcely disable pmic control led,and set brightness 0 */
+static void smbchg_chg_led_off(struct smbchg_chip *chip)
+{
+    u8 reg;
+    int rc;
 
+    reg =CHG_LED_OFF << CHG_LED_SHIFT;
+    rc = smbchg_sec_masked_write(chip,chip->bat_if_base + CMD_CHG_LED_REG,
+			LED_BLINKING_CFG_MASK, reg);
+}
+/* [BUGFIX]-End-BEGIN by TCTNB.XQJ*/
 static enum
 led_brightness smbchg_chg_led_brightness_get(struct led_classdev *cdev)
 {
@@ -3888,7 +4038,7 @@ static int smbchg_register_chg_led(struct smbchg_chip *chip)
 {
 	int rc;
 
-	chip->led_cdev.name = "red";
+	chip->led_cdev.name = "red_pmi8952";//[TASK]-modfiy by sun zhangyang,12/30/2015, task:1271765,1271793
 	chip->led_cdev.brightness_set = smbchg_chg_led_brightness_set;
 	chip->led_cdev.brightness_get = smbchg_chg_led_brightness_get;
 
@@ -4209,17 +4359,18 @@ static int smbchg_change_usb_supply_type(struct smbchg_chip *chip,
 	if (type != POWER_SUPPLY_TYPE_UNKNOWN)
 		chip->usb_supply_type = type;
 
+// [FEATURE]-MOD-BEGIN TCTNB.WJ,1/29/2016,PR1507964
 	if (type == POWER_SUPPLY_TYPE_USB)
-		current_limit_ma = DEFAULT_SDP_MA;
-	else if (type == POWER_SUPPLY_TYPE_USB)
 		current_limit_ma = DEFAULT_SDP_MA;
 	else if (type == POWER_SUPPLY_TYPE_USB_CDP)
 		current_limit_ma = DEFAULT_CDP_MA;
-	else if (type == POWER_SUPPLY_TYPE_USB_HVDCP
-			|| type == POWER_SUPPLY_TYPE_USB_HVDCP_3)
+	else if (type == POWER_SUPPLY_TYPE_USB_HVDCP)
 		current_limit_ma = smbchg_default_hvdcp_icl_ma;
+	else if (type == POWER_SUPPLY_TYPE_USB_HVDCP_3)
+		current_limit_ma = smbchg_default_hvdcp3_icl_ma;
 	else
 		current_limit_ma = smbchg_default_dcp_icl_ma;
+// [FEATURE]-MOD-END TCTNB.WJ,1/29/2016,PR1507964
 
 	pr_smb(PR_STATUS, "Type %d: setting mA = %d\n",
 		type, current_limit_ma);
@@ -4457,6 +4608,13 @@ static void handle_usb_removal(struct smbchg_chip *chip)
 	int rc;
 
 	pr_smb(PR_STATUS, "triggered\n");
+
+// [BUG]-ADD-BEGIN TCTNB.WJ,4/8/2016,PR1921545
+#if defined(CONFIG_TCT_8X76_COMMON)//MODIFY BY SZY, 4/11/2016,PR1929586
+	cancel_delayed_work(&chip->hvdcp_det_work);
+#endif
+// [BUG]-ADD-END TCTNB.WJ
+
 	smbchg_aicl_deglitch_wa_check(chip);
 	if (chip->force_aicl_rerun && !chip->very_weak_charger) {
 		rc = smbchg_hw_aicl_rerun_en(chip, true);
@@ -4534,11 +4692,18 @@ static bool is_usbin_uv_high(struct smbchg_chip *chip)
 #define HVDCP_NOTIFY_MS		2500
 static void handle_usb_insertion(struct smbchg_chip *chip)
 {
+// [BUG]-MOD-BEGIN TCTNB.WJ,2/17/2016,1507964
+#if !defined(CONFIG_TCT_8X76_COMMON)
+	struct power_supply *parallel_psy = get_parallel_psy(chip);
+#endif
+// [BUG]-MOD-END TCTNB.WJ
+
 	enum power_supply_type usb_supply_type;
 	int rc;
 	char *usb_type_name = "null";
 
 	pr_smb(PR_STATUS, "triggered\n");
+
 	/* usb inserted */
 	read_usb_type(chip, &usb_type_name, &usb_supply_type);
 	pr_smb(PR_STATUS,
@@ -4577,7 +4742,18 @@ static void handle_usb_insertion(struct smbchg_chip *chip)
 		schedule_delayed_work(&chip->hvdcp_det_work,
 					msecs_to_jiffies(HVDCP_NOTIFY_MS));
 
+// [BUG]-MOD-BEGIN TCTNB.WJ,2/17/2016,1507964
+#if defined(CONFIG_TCT_8X76_COMMON)
 	smbchg_detect_parallel_charger(chip);
+#else
+	if (parallel_psy) {
+		rc = power_supply_set_present(parallel_psy, true);
+		chip->parallel_charger_detected = rc ? false : true;
+		if (rc)
+			pr_err("parallel-charger absent rc=%d\n", rc);
+	}
+#endif
+// [BUG]-MOD-END TCTNB.WJ
 
 	if (chip->parallel.avail && chip->aicl_done_irq
 			&& !chip->enable_aicl_wake) {
@@ -4942,12 +5118,16 @@ static int smbchg_prepare_for_pulsing(struct smbchg_chip *chip)
 		goto out;
 	}
 
+// [BUG]-DEL-BEGIN TCTNB.WJ,2/17/2016,1507964
+#if !defined(CONFIG_TCT_8X76_COMMON)
 	pr_smb(PR_MISC, "HVDCP voting for 300mA ICL\n");
 	rc = vote(chip->usb_icl_votable, HVDCP_ICL_VOTER, true, 300);
 	if (rc < 0) {
 		pr_err("Couldn't vote for 300mA HVDCP ICL rc=%d\n", rc);
 		goto out;
 	}
+#endif
+// [BUG]-DEL-END
 
 	pr_smb(PR_MISC, "Disable AICL\n");
 	smbchg_sec_masked_write(chip, chip->usb_chgpth_base + USB_AICL_CFG,
@@ -5203,16 +5383,34 @@ static bool is_hvdcp_5v_cont_mode(struct smbchg_chip *chip)
 	return false;
 }
 
+// [BUG]-ADD-BEGIN TCTNB.WJ,4/8/2016,PR1921545
+#if defined(CONFIG_TCT_8X76_COMMON)//MODIFY BY SZY, 4/11/2016,PR1929586
+static void smbchg_recheck_offline(struct smbchg_chip *chip)
+{
+	bool src_detect = is_src_detect_high(chip);
+
+	if (!src_detect) {
+		update_usb_status(chip, 0, false);
+		chip->aicl_irq_count = 0;
+	}
+}
+#endif
+// [BUG]-ADD-END TCTNB.WJ
+
 static int smbchg_prepare_for_pulsing_lite(struct smbchg_chip *chip)
 {
 	int rc = 0;
 
+// [BUG]-ADD-BEGIN TCTNB.WJ,2/17/2016,1507964
+#if defined(CONFIG_TCT_8X76_COMMON)
 	pr_smb(PR_MISC, "HVDCP voting for 300mA ICL\n");
 	rc = vote(chip->usb_icl_votable, HVDCP_ICL_VOTER, true, 300);
 	if (rc < 0) {
 		pr_err("Couldn't vote for 300mA HVDCP ICL rc=%d\n", rc);
 		return rc;
 	}
+#endif
+// [BUG]-ADD-END
 
 	/* check if HVDCP is already in 5V continuous mode */
 	if (is_hvdcp_5v_cont_mode(chip)) {
@@ -5287,6 +5485,13 @@ out:
 		pr_smb(PR_MISC, "HVDCP removed - force removal\n");
 		update_usb_status(chip, 0, true);
 	}
+
+// [BUG]-ADD-BEGIN TCTNB.WJ,4/8/2016,PR1921545
+#if defined(CONFIG_TCT_8X76_COMMON)//MODIFY BY SZY, 4/11/2016,PR1929586
+	smbchg_recheck_offline(chip);
+#endif
+// [BUG]-ADD-END TCTNB.WJ
+
 	return rc;
 }
 
@@ -5489,6 +5694,12 @@ static enum power_supply_property smbchg_battery_properties[] = {
 	POWER_SUPPLY_PROP_RERUN_AICL,
 	POWER_SUPPLY_PROP_RESTRICTED_CHARGING,
 	POWER_SUPPLY_PROP_ALLOW_HVDCP3,
+	//sun zhangyang add for task 1133932 begin
+#if defined(CONFIG_TCT_8X76_IDOL4)
+        POWER_SUPPLY_PROP_TCL_FIXTEMP,
+        POWER_SUPPLY_PROP_TCL_FIXCAPACITY,
+#endif
+       //sun zhangyang add for task 1133932 end
 };
 
 static int smbchg_battery_set_property(struct power_supply *psy,
@@ -5554,6 +5765,23 @@ static int smbchg_battery_set_property(struct power_supply *psy,
 			power_supply_changed(&chip->batt_psy);
 		}
 		break;
+	//sun zhangyang add for task 1133932 begin
+#if defined(CONFIG_TCT_8X76_IDOL4)
+        case POWER_SUPPLY_PROP_TCL_FIXTEMP:
+		fixtemp = val->intval;
+		break;
+        case POWER_SUPPLY_PROP_TCL_FIXCAPACITY://sun zhangyang add for task 1472711
+		fixcapacity = val->intval;
+                if(fixcapacity == 1){
+                      chip->fake_battery_soc = 50;
+		      power_supply_changed(&chip->batt_psy);
+                }else{
+                      chip->fake_battery_soc = -EINVAL;
+                      power_supply_changed(&chip->batt_psy);
+                }
+		break;
+#endif
+       //sun zhangyang add for task 1133932 end
 	default:
 		return -EINVAL;
 	}
@@ -5578,6 +5806,12 @@ static int smbchg_battery_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_RERUN_AICL:
 	case POWER_SUPPLY_PROP_RESTRICTED_CHARGING:
 	case POWER_SUPPLY_PROP_ALLOW_HVDCP3:
+	//sun zhangyang add for task 1133932 begin
+#if defined(CONFIG_TCT_8X76_IDOL4)
+        case POWER_SUPPLY_PROP_TCL_FIXTEMP:
+        case POWER_SUPPLY_PROP_TCL_FIXCAPACITY:
+#endif
+        //sun zhangyang add for task 1133932 end
 		rc = 1;
 		break;
 	default:
@@ -5610,6 +5844,12 @@ static int smbchg_battery_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_TYPE:
 		val->intval = get_prop_charge_type(chip);
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/8/2015,1053888
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+		pr_smb(PR_NBTCLDBG, "TCTNB_FASTCHG:%d\n",
+				((val->intval > 1) ? (val->intval) : 0));
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/8/2015,1053888
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
 		val->intval = smbchg_float_voltage_get(chip);
@@ -5641,15 +5881,45 @@ static int smbchg_battery_get_property(struct power_supply *psy,
 	/* properties from fg */
 	case POWER_SUPPLY_PROP_CAPACITY:
 		val->intval = get_prop_batt_capacity(chip);
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/8/2015,1053888
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+		pr_smb(PR_NBTCLDBG, "TCTNB_SOC:%d\n", val->intval);
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/8/2015,1053888
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 		val->intval = get_prop_batt_current_now(chip);
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/8/2015,1053888
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+		pr_smb(PR_NBTCLDBG, "TCTNB_CURR:%d\n", val->intval);
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/8/2015,1053888
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 		val->intval = get_prop_batt_voltage_now(chip);
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/8/2015,1053888
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+		pr_smb(PR_NBTCLDBG, "TCTNB_VOL:%d\n", val->intval);
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/8/2015,1053888
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
 		val->intval = get_prop_batt_temp(chip);
+		//sun zhangyang add for task 1133932 begin
+#if defined(CONFIG_TCT_8X76_IDOL4)
+        if((fixtemp == 1) || proto1_check)
+              val->intval = 250;
+#endif
+        //sun zhangyang add for task 1133932 end
+#if defined(CONFIG_TCT_8X76_POP457) || defined(FEATURE_TCTSH_MMITEST)//sun zhangyang modidfy for proto2 temp diplay, task999892
+        val->intval = 250;//sun zhangyang modify for temporary power on.
+#endif
+
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/8/2015,1053888
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+		pr_smb(PR_NBTCLDBG, "TCTNB_TEMP:%d\n", val->intval);
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/8/2015,1053888
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
 		val->intval = get_prop_batt_voltage_max_design(chip);
@@ -5678,6 +5948,16 @@ static int smbchg_battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_ALLOW_HVDCP3:
 		val->intval = chip->allow_hvdcp3_detection;
 		break;
+	//sun zhangyang add for task 1133932 begin
+#if defined(CONFIG_TCT_8X76_IDOL4)
+        case POWER_SUPPLY_PROP_TCL_FIXTEMP:
+		val->intval = fixtemp;
+		break;
+        case POWER_SUPPLY_PROP_TCL_FIXCAPACITY:
+		val->intval = fixcapacity;
+	        break;
+#endif
+       //sun zhangyang add for task 1133932 end
 	default:
 		return -EINVAL;
 	}
@@ -5782,6 +6062,13 @@ static irqreturn_t batt_hot_handler(int irq, void *_chip)
 	smbchg_read(chip, &reg, chip->bat_if_base + RT_STS, 1);
 	chip->batt_hot = !!(reg & HOT_BAT_HARD_BIT);
 	pr_smb(PR_INTERRUPT, "triggered: 0x%02x\n", reg);
+
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/8/2015,1053888
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	pr_smb(PR_NBTCLDBG, "TCTNB_BATT_HOT:%d\n", chip->batt_hot);
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/8/2015,1053888
+
 	smbchg_parallel_usb_check_ok(chip);
 	if (chip->psy_registered)
 		power_supply_changed(&chip->batt_psy);
@@ -5800,6 +6087,13 @@ static irqreturn_t batt_cold_handler(int irq, void *_chip)
 	smbchg_read(chip, &reg, chip->bat_if_base + RT_STS, 1);
 	chip->batt_cold = !!(reg & COLD_BAT_HARD_BIT);
 	pr_smb(PR_INTERRUPT, "triggered: 0x%02x\n", reg);
+
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/8/2015,1053888
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	pr_smb(PR_NBTCLDBG, "TCTNB_BATT_COLD:%d\n", chip->batt_cold);
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/8/2015,1053888
+
 	smbchg_parallel_usb_check_ok(chip);
 	if (chip->psy_registered)
 		power_supply_changed(&chip->batt_psy);
@@ -5818,6 +6112,13 @@ static irqreturn_t batt_warm_handler(int irq, void *_chip)
 	smbchg_read(chip, &reg, chip->bat_if_base + RT_STS, 1);
 	chip->batt_warm = !!(reg & HOT_BAT_SOFT_BIT);
 	pr_smb(PR_INTERRUPT, "triggered: 0x%02x\n", reg);
+
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/8/2015,1053888
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	pr_smb(PR_NBTCLDBG, "TCTNB_BATT_WARM:%d\n", chip->batt_warm);
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/8/2015,1053888
+
 	smbchg_parallel_usb_check_ok(chip);
 	if (chip->psy_registered)
 		power_supply_changed(&chip->batt_psy);
@@ -5834,6 +6135,13 @@ static irqreturn_t batt_cool_handler(int irq, void *_chip)
 	smbchg_read(chip, &reg, chip->bat_if_base + RT_STS, 1);
 	chip->batt_cool = !!(reg & COLD_BAT_SOFT_BIT);
 	pr_smb(PR_INTERRUPT, "triggered: 0x%02x\n", reg);
+
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/8/2015,1053888
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	pr_smb(PR_NBTCLDBG, "TCTNB_BATT_COOL:%d\n", chip->batt_cool);
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/8/2015,1053888
+
 	smbchg_parallel_usb_check_ok(chip);
 	if (chip->psy_registered)
 		power_supply_changed(&chip->batt_psy);
@@ -5884,6 +6192,12 @@ static irqreturn_t chg_error_handler(int irq, void *_chip)
 					1);
 	}
 
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/8/2015,1053888
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	pr_smb(PR_NBTCLDBG, "TCTNB_CHG_ERROR:%d\n", reg);
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/8/2015,1053888
+
 	smbchg_parallel_usb_check_ok(chip);
 	if (chip->psy_registered)
 		power_supply_changed(&chip->batt_psy);
@@ -5897,7 +6211,13 @@ static irqreturn_t fastchg_handler(int irq, void *_chip)
 	struct smbchg_chip *chip = _chip;
 
 	pr_smb(PR_INTERRUPT, "p2f triggered\n");
+
+// [BUG]-ADD-BEGIN TCTNB.WJ,2/17/2016,1507964
+#if defined(CONFIG_TCT_8X76_COMMON)
 	smbchg_detect_parallel_charger(chip);
+#endif
+// [BUG]-ADD-END
+
 	smbchg_parallel_usb_check_ok(chip);
 	if (chip->psy_registered)
 		power_supply_changed(&chip->batt_psy);
@@ -5926,6 +6246,12 @@ static irqreturn_t chg_term_handler(int irq, void *_chip)
 	} else {
 		terminated = !!(reg & BAT_TCC_REACHED_BIT);
 		pr_smb(PR_INTERRUPT, "triggered: 0x%02x\n", reg);
+
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/8/2015,1053888
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+		pr_smb(PR_NBTCLDBG, "TCTNB_CHG_TERM:%d\n", terminated);
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/8/2015,1053888
 	}
 	/*
 	 * If charging has not actually terminated, then this means that
@@ -5955,6 +6281,13 @@ static irqreturn_t taper_handler(int irq, void *_chip)
 	taper_irq_en(chip, false);
 	smbchg_read(chip, &reg, chip->chgr_base + RT_STS, 1);
 	pr_smb(PR_INTERRUPT, "triggered: 0x%02x\n", reg);
+
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/8/2015,1053888
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	pr_smb(PR_NBTCLDBG, "TCTNB_TAPER:%d\n", reg);
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/8/2015,1053888
+
 	smbchg_parallel_usb_taper(chip);
 	if (chip->psy_registered)
 		power_supply_changed(&chip->batt_psy);
@@ -5970,6 +6303,13 @@ static irqreturn_t recharge_handler(int irq, void *_chip)
 
 	smbchg_read(chip, &reg, chip->chgr_base + RT_STS, 1);
 	pr_smb(PR_INTERRUPT, "triggered: 0x%02x\n", reg);
+
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/8/2015,1053888
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	pr_smb(PR_NBTCLDBG, "TCTNB_RECHARGE:%d\n", reg);
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/8/2015,1053888
+
 	smbchg_parallel_usb_check_ok(chip);
 	if (chip->psy_registered)
 		power_supply_changed(&chip->batt_psy);
@@ -6057,6 +6397,12 @@ static irqreturn_t usbin_ov_handler(int irq, void *_chip)
 		goto out;
 	}
 
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/8/2015,1053888
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	pr_smb(PR_NBTCLDBG, "TCTNB_USBIN_OV:%d\n", reg);
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/8/2015,1053888
+
 	/* OV condition is detected. Notify it to USB psy */
 	if (reg & USBIN_OV_BIT) {
 		chip->usb_ov_det = true;
@@ -6100,7 +6446,14 @@ static irqreturn_t usbin_uv_handler(int irq, void *_chip)
 		goto out;
 	}
 
-	pr_smb(PR_STATUS,
+	set_property_on_fg(chip, POWER_SUPPLY_PROP_UPDATE_NOW, 1);
+	chip->vbat_at_uv = get_prop_batt_voltage_now(chip);
+	if (chip->vbat_at_uv < 0)
+		pr_err("Unable to read vbat_at_uv\n");
+
+// [FEATURE]-MOD-BEGIN TCTNB.WJ,1/29/2016,PR1507964
+	pr_smb_rt(PR_STATUS,
+// [FEATURE]-MOD-END TCTNB.WJ
 		"%s chip->usb_present = %d rt_sts = 0x%02x hvdcp_3_det_ignore_uv = %d aicl = %d\n",
 		chip->hvdcp_3_det_ignore_uv ? "Ignoring":"",
 		chip->usb_present, reg, chip->hvdcp_3_det_ignore_uv,
@@ -6126,7 +6479,9 @@ static irqreturn_t usbin_uv_handler(int irq, void *_chip)
 		goto out;
 
 	if ((reg & USBIN_UV_BIT) && (reg & USBIN_SRC_DET_BIT)) {
-		pr_smb(PR_STATUS, "Very weak charger detected\n");
+// [FEATURE]-MOD-BEGIN TCTNB.WJ,1/29/2016,PR1507964
+		pr_smb_rt(PR_STATUS, "Very weak charger detected\n");
+// [FEATURE]-MOD-END TCTNB.WJ
 		chip->very_weak_charger = true;
 		rc = smbchg_read(chip, &reg,
 				chip->usb_chgpth_base + ICL_STS_2_REG, 1);
@@ -6136,6 +6491,10 @@ static irqreturn_t usbin_uv_handler(int irq, void *_chip)
 			goto out;
 		}
 		if ((reg & ICL_MODE_MASK) != ICL_MODE_HIGH_CURRENT) {
+// [BUG]-MOD-BEGIN TCTNB.WJ,3/7/2016, remove this according to qcom suggestion.
+#if defined(CONFIG_TCT_8X76_COMMON)//[BUG]-MOD TCTSH.SZY,3/9/2016,PR1644521
+			pr_smb_rt(PR_STATUS,"ignoring for Very weak charger \n");
+#else
 			/*
 			 * If AICL is not even enabled, this is either an
 			 * SDP or a grossly out of spec charger. Do not
@@ -6145,13 +6504,17 @@ static irqreturn_t usbin_uv_handler(int irq, void *_chip)
 					WEAK_CHARGER_EN_VOTER, true, 0);
 			if (rc)
 				pr_err("could not disable charger: %d", rc);
+#endif
+// [BUG]-MOD-END
 		} else if ((chip->aicl_deglitch_short || chip->force_aicl_rerun)
 			&& aicl_level == chip->tables.usb_ilim_ma_table[0]) {
 			rc = smbchg_hw_aicl_rerun_en(chip, false);
 			if (rc)
 				pr_err("could not enable aicl reruns: %d", rc);
 		}
-		pr_smb(PR_MISC, "setting usb psy health UNSPEC_FAILURE\n");
+// [FEATURE]-MOD-BEGIN TCTNB.WJ,1/29/2016,PR1507964
+		pr_smb_rt(PR_MISC, "setting usb psy health UNSPEC_FAILURE\n");
+// [FEATURE]-MOD-END TCTNB.WJ
 		rc = power_supply_set_health_state(chip->usb_psy,
 				POWER_SUPPLY_HEALTH_UNSPEC_FAILURE);
 		if (rc)
@@ -6178,6 +6541,12 @@ static irqreturn_t src_detect_handler(int irq, void *_chip)
 	bool usb_present = is_usb_present(chip);
 	bool src_detect = is_src_detect_high(chip);
 	int rc;
+
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,12/8/2015,1053888
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	pr_smb(PR_NBTCLDBG, "TCTNB_SRC_DETECT:%d\n", src_detect);
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,12/8/2015,1053888
 
 	pr_smb(PR_STATUS,
 		"%s chip->usb_present = %d usb_present = %d src_detect = %d hvdcp_3_det_ignore_uv=%d\n",
@@ -6335,7 +6704,12 @@ static int determine_initial_status(struct smbchg_chip *chip)
 	batt_cold_handler(0, chip);
 	chg_term_handler(0, chip);
 	usbid_change_handler(0, chip);
+
+// [FEATURE]-DEL-BEGIN TCTNB.WJ,11/19/2015,536521
+#if !defined(CONFIG_TCT_8X76_COMMON)
 	src_detect_handler(0, chip);
+#endif
+// [FEATURE]-DEL-END TCTNB.WJ,09/29/2015,536521
 
 	chip->usb_present = is_usb_present(chip);
 	chip->dc_present = is_dc_present(chip);
@@ -6343,9 +6717,10 @@ static int determine_initial_status(struct smbchg_chip *chip)
 	if (chip->usb_present) {
 		pr_smb(PR_MISC, "setting usb psy dp=f dm=f\n");
 		power_supply_set_dp_dm(chip->usb_psy,
-				POWER_SUPPLY_DP_DM_DPF_DMF);
+			POWER_SUPPLY_DP_DM_DPF_DMF);
 		handle_usb_insertion(chip);
-	} else {
+	}
+	else {
 		handle_usb_removal(chip);
 	}
 
@@ -6489,7 +6864,10 @@ static void batt_ov_wa_check(struct smbchg_chip *chip)
 static int smbchg_hw_init(struct smbchg_chip *chip)
 {
 	int rc, i;
-	u8 reg, mask;
+	u8 reg;
+        #if !defined(FEATURE_TCTSH_MMITEST)
+        u8 mask;
+        #endif
 
 	rc = smbchg_read(chip, chip->revision,
 			chip->misc_base + REVISION1_REG, 4);
@@ -6684,7 +7062,15 @@ static int smbchg_hw_init(struct smbchg_chip *chip)
 			dev_err(chip->dev, "Unable to read SFT_CFG rc = %d\n",
 				rc);
 		else if (!(reg & SFT_EN_MASK))
+		{
 			chip->safety_timer_en = true;
+
+// [FEATURE]-ADD-BEGIN TCTNB.WJ,09/29/2015,536521
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+			smbchg_safety_timer_enable(chip, false);
+#endif
+// [FEATURE]-ADD-END TCTNB.WJ,09/29/2015,536521
+		}
 	}
 
 	/* configure jeita temperature hard limit */
@@ -6710,7 +7096,7 @@ static int smbchg_hw_init(struct smbchg_chip *chip)
 		dev_err(chip->dev, "Couldn't set buck frequency rc = %d\n", rc);
 		return rc;
 	}
-
+        #if !defined(FEATURE_TCTSH_MMITEST)
 	/* battery missing detection */
 	mask =  BATT_MISSING_ALGO_BIT;
 	reg = chip->bmd_algo_disabled ? BATT_MISSING_ALGO_BIT : 0;
@@ -6725,6 +7111,7 @@ static int smbchg_hw_init(struct smbchg_chip *chip)
 									rc);
 		return rc;
 	}
+       #endif
 
 	if (chip->vchg_adc_channel != -EINVAL) {
 		/* configure and enable VCHG */
@@ -7064,6 +7451,9 @@ static int smb_parse_dt(struct smbchg_chip *chip)
 			"aicl-rerun-period-s", rc, 1);
 	OF_PROP_READ(chip, chip->vchg_adc_channel,
 				"vchg-adc-channel-id", rc, 1);
+
+	OF_PROP_READ(chip, chip->disable_parallel_uv,
+				"disable-parallel-uv", rc, 1);
 
 	/* read boolean configuration properties */
 	chip->use_vfloat_adjustments = of_property_read_bool(node,
@@ -7669,6 +8059,16 @@ static int smbchg_probe(struct spmi_device *spmi)
 	chip->usb_psy = usb_psy;
 	chip->fake_battery_soc = -EINVAL;
 	chip->usb_online = -EINVAL;
+
+/*MODIFIED-BEGIN by jin.wang, 2016-04-11,BUG-1921545*/
+// [BUG]-ADD-BEGIN TCTNB.WJ,4/9/2016,PR 1912713
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	chip->parallel_ctrl_warm = 400;
+	chip->parallel_ctrl_cool = 150;
+#endif
+// [BUG]-ADD-END TCTNB.WJ,4/9/2016
+/*MODIFIED-END by jin.wang,BUG-1921545*/
+
 	dev_set_drvdata(&spmi->dev, chip);
 
 	spin_lock_init(&chip->sec_access_lock);
@@ -7774,7 +8174,14 @@ static int smbchg_probe(struct spmi_device *spmi)
 			goto unregister_led_class;
 		}
 	}
-
+/* [BUGFIX]-Add-BEGIN by TCTNB.XQJ, RR-526565, 2015/11/13,default value of pmic controling led maybe open,so it need forcely disable pmic control led,and set brightness 0 */
+        else
+        {
+            smbchg_chg_led_off(chip);
+            chip->cfg_chg_led_sw_ctrl=false;
+            smbchg_chg_led_controls(chip);
+        }
+/* [BUGFIX]-END-by XQJ*/
 	rc = smbchg_request_irqs(chip);
 	if (rc < 0) {
 		dev_err(&spmi->dev, "Unable to request irqs rc = %d\n", rc);

@@ -115,8 +115,14 @@ void mdss_check_dsi_ctrl_status(struct work_struct *work, uint32_t interval)
 		else
 			goto status_dead;
 	}
-
-
+/* [FEATURE]-Add-BEGIN by TCTNB.CY, task-1395489, 2016/01/11, enable error flag detect*/
+#ifdef CONFIG_ERR_FLAG_DETECT
+	if(atomic_read(&ctrl_pdata->err_flag_ready)){
+		pr_err("ERR_FLAG RESET \n");
+		goto status_dead;
+	}
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2016/01/11*/
 	/*
 	 * TODO: Because mdss_dsi_cmd_mdp_busy has made sure DMA to
 	 * be idle in mdss_dsi_cmdlist_commit, it is not necessary

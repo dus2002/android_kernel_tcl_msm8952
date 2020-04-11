@@ -630,6 +630,9 @@ static int smb1351_fastchg_current_set(struct smb1351_charger *chip,
 		}
 		if (i < 0)
 			i = 0;
+		chip->fastchg_current_max_ma = pre_chg_current[i];
+		pr_debug("prechg setting %02x\n", i);
+
 		if (i == 0)
 			i = 0x7 << SMB1351_CHG_PRE_SHIFT;
 		else if (i == 1)
@@ -637,13 +640,12 @@ static int smb1351_fastchg_current_set(struct smb1351_charger *chip,
 		else
 			i = (i - 2) << SMB1351_CHG_PRE_SHIFT;
 
-		pr_debug("prechg setting %02x\n", i);
-
 		rc = smb1351_masked_write(chip, CHG_OTH_CURRENT_CTRL_REG,
 				PRECHG_CURRENT_MASK, i);
 		if (rc)
 			pr_err("Couldn't write CHG_OTH_CURRENT_CTRL_REG rc=%d\n",
 									rc);
+
 		return smb1351_masked_write(chip, VARIOUS_FUNC_2_REG,
 				PRECHG_TO_FASTCHG_BIT, PRECHG_TO_FASTCHG_BIT);
 	} else {
@@ -654,6 +656,8 @@ static int smb1351_fastchg_current_set(struct smb1351_charger *chip,
 		}
 		if (i < 0)
 			i = 0;
+		chip->fastchg_current_max_ma = fast_chg_current[i];
+
 		i = i << SMB1351_CHG_FAST_SHIFT;
 		pr_debug("fastchg limit=%d setting %02x\n",
 					chip->fastchg_current_max_ma, i);
@@ -1373,6 +1377,17 @@ static int smb1351_parallel_set_chg_present(struct smb1351_charger *chip,
 			pr_err("Couldn't configure for volatile rc = %d\n", rc);
 			return rc;
 		}
+// [BUG]-ADD-BEGIN TCTNB.WJ,3/7/2016, PR1507964, use qcom patch to solve hold-off issue
+#if defined(CONFIG_TCT_8X76_COMMON)
+		rc = smb1351_masked_write(chip, PON_OPTIONS_REG,
+			INPUT_MISSING_POLLER_CONFIG_BIT, 
+			INPUT_MISSING_POLLER_CONFIG_BIT);
+		if (rc) {
+			pr_err("Couldn't set 0x13[3] to 1, rc = %d\n", rc);
+			return rc;
+		}
+#endif
+// [BUG]-ADD-END
 
 		/* set the float voltage */
 		if (chip->vfloat_mv != -EINVAL) {
@@ -1521,6 +1536,7 @@ static int smb1351_parallel_set_property(struct power_supply *psy,
 			index = smb1351_get_closest_usb_setpoint(
 						val->intval / 1000);
 			chip->usb_psy_ma = usb_chg_current[index];
+			pr_debug("smb1351: usb_psy_ma set to %dmA ", chip->usb_psy_ma);
 			rc = smb1351_set_usb_chg_current(chip,
 						chip->usb_psy_ma);
 		}

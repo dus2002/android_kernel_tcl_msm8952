@@ -67,6 +67,16 @@ obj-$(CONFIG_TI_DRV2667) += ti_drv2667.o
 obj-$(CONFIG_QPNP_MISC) += qpnp-misc.o
 obj-$(CONFIG_QCOM_LIQUID_DOCK)	+= qcom_liquid_dock.o
 obj-y				+= qcom/
+#[TASK-1816475] ADD by gtguo [FEATURE]-Add-BEGIN by TCTSH.GTGUO, 03/25/2015, defect-1863591
+ifeq ($(TCT_TARGET_MINITOR_HANG), true)
+obj-y				+= monitor_hang.o
+endif
+#end [FEATURE]-Add-end by TCTSH.GTGUO, 03/25/2015, defect-1863591
 obj-$(CONFIG_USB_EXT_TYPE_C_PERICOM)	+= type-c-pericom.o
 obj-$(CONFIG_USB_EXT_TYPE_C_TI)		+= type-c-ti.o
 obj-$(CONFIG_UID_CPUTIME) 	+= uid_cputime.o
+#[FEATURE]-Add-BEGIN by shitao.qiu,2015/11/6, task 864026
+ifdef CONFIG_TCT_8X76_IDOL4S_VDF
+obj-$(CONFIG_TCT_SYNAP)         += vfsSpi/
+endif
+#[FEATURE]-Add-END by shitao.qiu,2015/11/6

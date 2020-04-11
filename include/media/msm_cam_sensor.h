@@ -665,6 +665,11 @@ struct sensor_init_cfg_data {
 #define VIDIOC_MSM_OIS_CFG \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 11, struct msm_ois_cfg_data)
 
+/* Add-BEGIN by xiaoming.hu@tcl.com OTP dev*/	
+#define VIDIOC_MSM_SENSOR_GET_OTP_STATUS \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 12, uint32_t)	
+/* Add-END by xiaoming.hu@tcl.com end*/
+
 #define VIDIOC_MSM_FLASH_CFG \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 13, struct msm_flash_cfg_data_t)
 

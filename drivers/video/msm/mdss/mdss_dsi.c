@@ -25,6 +25,7 @@
 #include <linux/clk.h>
 #include <linux/uaccess.h>
 #include <linux/pm_qos.h>
+#include <linux/qpnp/pin.h>
 
 #include "mdss.h"
 #include "mdss_panel.h"
@@ -43,7 +44,46 @@ static struct mdss_dsi_data *mdss_dsi_res;
 
 static struct pm_qos_request mdss_dsi_pm_qos_request;
 
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, FR-764135, 2015/10/20, configure mpp3 pin for pmi8952 amoled power supply*/
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+static bool power_by_pmic = true;	//powered by pmic default
+static int board_id_gpio_27 = -1;
+static int pmi8952_mpp3 = -1;
+static struct qpnp_pin_cfg pmi8952_mpp3_endis = {
+.mode = QPNP_PIN_MODE_DIG_OUT,
+.vin_sel = QPNP_PIN_VIN2,
+.src_sel = QPNP_PIN_SEL_FUNC_CONSTANT, /* Function constant */
+.master_en = QPNP_PIN_MASTER_ENABLE,
+};
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CY, 2015/10/20*/
+
+/* [FEATURE]-Mod-BEGIN by TCTNB.CY, task-585318, 2015/12/03, enable panel low persistence mode*/
+#ifdef TCT_FEATURE_PANEL_LOW_PERSISTENCE
+static char panel_low_persistence_cmd[4] = "off";
+static char lp_bl_level = 2;		//default 80%
+static bool arg_ready = false;
+static u32 panel_low_persistence_reg_read(struct mdss_dsi_ctrl_pdata *ctrl_pdata);
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2015/12/03*/
+
+/* [FEATURE]-Mod-BEGIN by TCTNB.CY, task-1061400, 2015/12/18, enable panel HBM mode*/
+#ifdef TCT_FEATURE_PANEL_HBM
+static char panel_hbm_set_status[4] = "off";
+static char panel_hbm_cur_status[4] = "off";
+static char panel_hbm_thermal_status[7] = "unlock";
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2015/12/18*/
+
+/* [FEATURE]-Mod-BEGIN by TCTSH.JHYU, task-1176273, 2015/12/17, add lcd detect statue node*/
+#ifdef FEATURE_TCTSH_LCD_DETECT
+static int lcd_id0 = -1;
+static int lcd_id1 = -1;
+bool lcm_is_absent =false;
+#endif
+/* [FEATURE]-Mod-END by  TCTSH.JHYU, 2015/12/17*/
 static void mdss_dsi_pm_qos_add_request(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+
 {
 	struct irq_info *irq_info;
 
@@ -280,6 +320,7 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 		pr_warn("%s: Panel reset failed. rc=%d\n", __func__, ret);
 		ret = 0;
 	}
+        mdelay(120);//sun zhangyang modify for adjust lcd timing based on hw.task1424253,2016-01-13
 
 	if (mdss_dsi_pinctrl_set_state(ctrl_pdata, false))
 		pr_debug("reset disable: pinctrl not enabled\n");
@@ -290,6 +331,16 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 	if (ret)
 		pr_err("%s: failed to disable vregs for %s\n",
 			__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, FR-764135, 2015/10/20, configure mpp3 pin for pmi8952 amoled power supply*/
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	if (power_by_pmic) {
+		if (gpio_is_valid(pmi8952_mpp3)) {
+			pmi8952_mpp3_endis.master_en = QPNP_PIN_MASTER_DISABLE;
+			qpnp_pin_config(pmi8952_mpp3, &pmi8952_mpp3_endis);
+		}
+	}
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CY, 2015/10/20*/
 
 end:
 	return ret;
@@ -304,10 +355,44 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
 	}
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, FR-764135, 2015/10/20, configure mpp3 pin for pmi8952 amoled power supply*/
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	if (power_by_pmic) {
+		if (gpio_is_valid(pmi8952_mpp3)) {
+			pmi8952_mpp3_endis.master_en = QPNP_PIN_MASTER_ENABLE;
+			qpnp_pin_config(pmi8952_mpp3, &pmi8952_mpp3_endis);
+		}
+	}
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CY, 2015/10/20*/
 
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
-
+/* [FEATURE]-Mod-BEGIN by TCTSH.JHYU, task-1190538, 2015/12/19, disable ibb,lab*/
+#ifdef FEATURE_TCTSH_LCD_DETECT
+    if(lcm_is_absent)
+    {
+		ret = msm_dss_enable_vreg(
+		ctrl_pdata->panel_power_data.vreg_config,
+		ctrl_pdata->panel_power_data.num_vreg, 0);
+		pr_err("jhyu mini disable_vreg\n");
+	    if (ret) {
+		    pr_err("%s: failed to enable vregs for %s\n",__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
+		    return ret;
+	    }
+    }
+    else
+    {
+    	ret = msm_dss_enable_vreg(
+		ctrl_pdata->panel_power_data.vreg_config,
+		ctrl_pdata->panel_power_data.num_vreg, 1);
+    	pr_err("jhyu mini enable_vreg\n");
+	    if (ret) {
+		    pr_err("%s: failed to enable vregs for %s\n",__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
+		    return ret;
+	    }
+    }
+#else
 	ret = msm_dss_enable_vreg(
 		ctrl_pdata->panel_power_data.vreg_config,
 		ctrl_pdata->panel_power_data.num_vreg, 1);
@@ -316,7 +401,8 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 			__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
 		return ret;
 	}
-
+#endif
+/* [FEATURE]-Mod-END by TCTSH.JHYU*/
 	/*
 	 * If continuous splash screen feature is enabled, then we need to
 	 * request all the GPIOs that have already been configured in the
@@ -1153,6 +1239,25 @@ panel_power_ctrl:
 	    && (panel_info->new_fps != panel_info->mipi.frame_rate))
 		panel_info->mipi.frame_rate = panel_info->new_fps;
 
+/* [FEATURE]-Mod-BEGIN by TCTNB.CY, task-585318, 2015/12/03, enable panel low persistence mode*/
+#ifdef TCT_FEATURE_PANEL_LOW_PERSISTENCE
+	if (!strncmp(panel_low_persistence_cmd, "on", 2)) {
+		strlcpy(panel_low_persistence_cmd, "off", sizeof(panel_low_persistence_cmd));
+	}
+	lp_bl_level = 2;
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2015/12/03*/
+/* [FEATURE]-Mod-BEGIN by TCTNB.CY, task-1061400, 2015/12/18, enable panel HBM mode*/
+#ifdef TCT_FEATURE_PANEL_HBM
+	if (!strncmp(panel_hbm_cur_status, "on", 2)) {
+		strlcpy(panel_hbm_cur_status, "off", sizeof(panel_hbm_cur_status));
+	}
+	if (!strncmp(panel_hbm_set_status, "on", 2)) {
+		strlcpy(panel_hbm_set_status, "off", sizeof(panel_hbm_set_status));
+	}
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2015/12/18*/
+
 end:
 	pr_debug("%s-:\n", __func__);
 
@@ -1424,6 +1529,34 @@ static int mdss_dsi_pinctrl_init(struct platform_device *pdev)
 	return 0;
 }
 
+/* [BUGFIX]-Mod-BEGIN by TCTNB.CY, PR-1048316, 2016/01/13, change brightness dimming mode when panel on*/
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+void mdss_dsi_panel_change_dimming(struct work_struct *work)
+{
+	struct dcs_cmd_req cmdreq;
+	struct mdss_data_type *mdata = mdss_res;
+	struct mdss_mdp_ctl *ctl = mdata->ctl_off + 0;
+	struct mdss_panel_data *panel_data = ctl->panel_data;
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata = container_of(panel_data, struct mdss_dsi_ctrl_pdata, panel_data);
+
+	char panel_dimming[2] = {0x53, 0x28};		//dimming mode
+	struct dsi_cmd_desc dimming_change_cmd[] = {
+		{{DTYPE_DCS_WRITE1, 1, 0, 0, 0, sizeof(panel_dimming)},panel_dimming},
+		{{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(panel_dimming)},panel_dimming},
+	};
+
+	memset(&cmdreq, 0, sizeof(cmdreq));
+	cmdreq.cmds = dimming_change_cmd;
+	cmdreq.cmds_cnt = 2;
+	cmdreq.flags = CMD_REQ_COMMIT | CMD_CLK_CTRL | CMD_REQ_HS_MODE;
+	cmdreq.rlen = 0;
+	cmdreq.cb = NULL;
+
+	mdss_dsi_cmdlist_put(ctrl_pdata, &cmdreq);
+}
+#endif
+/* [BUGFIX]-Mod-END by TCTNB.CY, 2016/01/13*/
+
 static int mdss_dsi_unblank(struct mdss_panel_data *pdata)
 {
 	int ret = 0;
@@ -1471,8 +1604,26 @@ static int mdss_dsi_unblank(struct mdss_panel_data *pdata)
 		if (mdss_dsi_is_te_based_esd(ctrl_pdata))
 			enable_irq(gpio_to_irq(ctrl_pdata->disp_te_gpio));
 	}
+/* [FEATURE]-Mod-BEGIN by TCTNB.CY, task-1379356, 2016/01/08, read gama parameter on hs mode*/
+#ifdef TCT_FEATURE_PANEL_LOW_PERSISTENCE
+	if ((ctrl_pdata->ndx == 0) && !arg_ready) {
+		if (panel_low_persistence_reg_read(ctrl_pdata))			//read gama parameters once
+			arg_ready = true;
+		else
+			pr_err("Read Gama parameters failed!\n");
+	}
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2016/01/08*/
 
 	ctrl_pdata->ctrl_state |= CTRL_STATE_PANEL_INIT;
+
+/* [FEATURE]-Add-BEGIN by TCTNB.CY, task-1395489, 2016/01/11, enable error flag detect*/
+#ifdef CONFIG_ERR_FLAG_DETECT
+	if (gpio_is_valid(ctrl_pdata->err_flag_gpio) && mdss_dsi_is_left_ctrl(ctrl_pdata)) {
+		enable_irq(gpio_to_irq(ctrl_pdata->err_flag_gpio));
+	}
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2016/01/11*/
 error:
 	mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 0);
 
@@ -1538,6 +1689,15 @@ static int mdss_dsi_blank(struct mdss_panel_data *pdata, int power_state)
 		}
 		mdss_dsi_set_tear_off(ctrl_pdata);
 	}
+
+/* [FEATURE]-Add-BEGIN by TCTNB.CY, task-1395489, 2016/01/11, enable error flag detect*/
+#ifdef CONFIG_ERR_FLAG_DETECT
+	if (gpio_is_valid(ctrl_pdata->err_flag_gpio) && mdss_dsi_is_left_ctrl(ctrl_pdata)) {
+		disable_irq(gpio_to_irq(ctrl_pdata->err_flag_gpio));
+		atomic_set(&ctrl_pdata->err_flag_ready, 0);
+	}
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2016/01/11*/
 
 	if (ctrl_pdata->ctrl_state & CTRL_STATE_PANEL_INIT) {
 		if (!pdata->panel_info.dynamic_switch_pending) {
@@ -2464,7 +2624,86 @@ static struct device_node *mdss_dsi_config_panel(struct platform_device *pdev)
 
 	return dsi_pan_node;
 }
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, FR-764135, 2015/10/20, read board id for identify power supply*/
+#if defined (CONFIG_TCT_8X76_IDOL4S) || defined (CONFIG_TCT_8X76_IDOL4S_VDF)
+static void board_id_detect(void)
+{
+	int status = -1;
+	int ret = 0;
 
+	if (gpio_is_valid(board_id_gpio_27)) {
+		ret = gpio_request(board_id_gpio_27, "board_id0");
+		if (ret) {
+			pr_err("%s: gpio_board_id0 request failed\n", __func__);
+			gpio_free(board_id_gpio_27);
+			return;
+		}
+
+		ret = gpio_direction_input(board_id_gpio_27);
+		if (ret) {
+			pr_err("%s: set_direction for gpio failed, rc=%d\n", __func__, ret);
+			gpio_free(board_id_gpio_27);
+			return;
+		}
+
+		status=gpio_get_value(board_id_gpio_27);
+		gpio_free(board_id_gpio_27);
+		if (status == 0)
+			power_by_pmic = false;
+		else
+			power_by_pmic = true;
+	}
+}
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CY, 2015/10/20*/
+/* [FEATURE]-Mod-BEGIN by TCTSH.JHYU, task-1176273, 2015/12/17, add lcd detect statue node*/
+#ifdef FEATURE_TCTSH_LCD_DETECT
+static void lcd_id_detect(void)
+{
+	int lcd_id0_status = -1;
+	int lcd_id1_status = -1;
+	int ret = 0;
+
+	if (gpio_is_valid(lcd_id0)) {
+		ret = gpio_request(lcd_id0, "lcd_id0");
+		if (ret) {
+			pr_err("%s: lcd_id0 request failed\n", __func__);
+			gpio_free(lcd_id0);
+			return;
+		}
+		ret = gpio_direction_input(lcd_id0);
+		if (ret) {
+			pr_err("%s: set_direction for gpio failed, rc=%d\n", __func__, ret);
+			gpio_free(lcd_id0);
+			return;
+		}
+		lcd_id0_status=gpio_get_value(lcd_id0);
+		gpio_free(lcd_id0);
+		}
+
+	if (gpio_is_valid(lcd_id1)) {
+		ret = gpio_request(lcd_id1, "lcd_id0");
+		if (ret) {
+			pr_err("%s: lcd_id1 request failed\n", __func__);
+			gpio_free(lcd_id1);
+			return;
+		}
+
+		ret = gpio_direction_input(lcd_id1);
+		if (ret) {
+			pr_err("%s: set_direction for gpio failed, rc=%d\n", __func__, ret);
+			gpio_free(lcd_id1);
+			return;
+		}
+		lcd_id1_status=gpio_get_value(lcd_id1);
+		gpio_free(lcd_id1);
+		}
+        pr_info("lcd_id0_status is %d,lcd_id1_status is %d\n",lcd_id0_status,lcd_id1_status);
+        if((1 == lcd_id0_status) && (1 == lcd_id1_status))
+           lcm_is_absent = true;
+	}
+#endif
+/* [FEATURE]-Mod-END by TCTSH.JHYU*/
 static int mdss_dsi_ctrl_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -2565,6 +2804,23 @@ static int mdss_dsi_ctrl_probe(struct platform_device *pdev)
 		disable_irq(gpio_to_irq(ctrl_pdata->disp_te_gpio));
 	}
 
+/* [FEATURE]-Add-BEGIN by TCTNB.CY, task-1395489, 2016/01/11, enable error flag detect*/
+#ifdef CONFIG_ERR_FLAG_DETECT
+	atomic_set(&ctrl_pdata->err_flag_ready, 0);
+	if (gpio_is_valid(ctrl_pdata->err_flag_gpio) && mdss_dsi_is_left_ctrl(ctrl_pdata)){
+		rc = devm_request_irq(&pdev->dev,
+			gpio_to_irq(ctrl_pdata->err_flag_gpio),
+			panel_err_flag_handler, IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+			"ERR_FLAG_GPIO", ctrl_pdata);
+		if (rc) {
+			pr_err("ERR FLAG request_irq failed.\n");
+			goto error_pan_node;
+		}
+		disable_irq(gpio_to_irq(ctrl_pdata->err_flag_gpio));
+	}
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2016/01/11*/
+
 	ctrl_pdata->workq = create_workqueue("mdss_dsi_dba");
 	if (!ctrl_pdata->workq) {
 		pr_err("%s: Error creating workqueue\n", __func__);
@@ -2582,6 +2838,18 @@ static int mdss_dsi_ctrl_probe(struct platform_device *pdev)
 		ctrl_pdata->shared_data->dsi0_active = true;
 	else
 		ctrl_pdata->shared_data->dsi1_active = true;
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, FR-764135, 2015/10/20, configure mpp3 pin for pmi8952 amoled power supply*/
+#if defined (CONFIG_TCT_8X76_IDOL4S) || defined (CONFIG_TCT_8X76_IDOL4S_VDF)
+	board_id_detect();
+	if(!power_by_pmic) {		//disable mpp3 when used external power IC
+		if (gpio_is_valid(pmi8952_mpp3)) {
+			pmi8952_mpp3_endis.master_en = QPNP_PIN_MASTER_DISABLE;
+			qpnp_pin_config(pmi8952_mpp3, &pmi8952_mpp3_endis);
+		}
+	}
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CY, 2015/10/20*/
+
 
 	return 0;
 
@@ -2917,6 +3185,372 @@ static const struct of_device_id mdss_dsi_ctrl_dt_match[] = {
 };
 MODULE_DEVICE_TABLE(of, mdss_dsi_ctrl_dt_match);
 
+/* [FEATURE]-Mod-BEGIN by TCTNB.CY, task-585318, 2015/12/03, enable panel low persistence mode*/
+#ifdef TCT_FEATURE_PANEL_LOW_PERSISTENCE
+static char low_persistence_cmd1[] = {0xF0, 0x5A, 0x5A};		//level2 unlock
+static char low_persistence_cmd1_1[] = {0xFC, 0x5A, 0x5A};
+static char low_persistence_cmd2[] = {0xF7, 0x03};			//refresh
+static char low_persistence_cmd3[] = {0xF0, 0xA5, 0xA5};		//level2 lock
+static char low_persistence_cmd3_1[] = {0xFC, 0xA5, 0xA5};
+static char low_persistence_cmd4[] = {0x51, 0xA8};
+
+static char low_persistence_on_cmd1[] = {0xB0, 0x0D};
+static char low_persistence_on_cmd2[] = {0xB1, 0x00};
+static char low_persistence_on_cmd3[] = {0xB0, 0x08};
+static char low_persistence_on_cmd4[] = {0xB1, 0x80, 0x0C};
+static char low_persistence_on_cmd5[28] = {0xC8, 0x00,};
+
+static char low_persistence_off_cmd1[] = {0xB0, 0x0D};
+static char low_persistence_off_cmd2[] = {0xB1, 0x80};
+static char low_persistence_off_cmd3[] = {0xB0, 0x08};
+static char low_persistence_off_cmd4[] = {0xB1, 0x20, 0x08};
+static char low_persistence_off_cmd5[28] = {0xC8, 0x00};
+
+static int gama_reg_off[] = {0, 7, 0, -6, 0, 15, 7, 7, 5, 9, 12, 10, 9, 19, 8,
+							11, 8, 5, 13, 25, 8, 20, 44, 16, 83, 89, 13};
+
+static struct dsi_cmd_desc low_persistence_on[] = {
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_cmd1)},low_persistence_cmd1},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_on_cmd1)},low_persistence_on_cmd1},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_on_cmd2)},low_persistence_on_cmd2},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_on_cmd3)},low_persistence_on_cmd3},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_on_cmd4)},low_persistence_on_cmd4},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_on_cmd5)},low_persistence_on_cmd5},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_cmd2)},low_persistence_cmd2},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_cmd3)},low_persistence_cmd3},
+	{{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(low_persistence_cmd4)},low_persistence_cmd4},
+};
+static struct dsi_cmd_desc low_persistence_off[] = {
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_cmd1)},low_persistence_cmd1},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_off_cmd1)},low_persistence_off_cmd1},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_off_cmd2)},low_persistence_off_cmd2},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_off_cmd3)},low_persistence_off_cmd3},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_off_cmd4)},low_persistence_off_cmd4},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_off_cmd5)},low_persistence_off_cmd5},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_cmd2)},low_persistence_cmd2},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_cmd3)},low_persistence_cmd3},
+	{{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(low_persistence_cmd4)},low_persistence_cmd4},
+};
+
+static struct dsi_cmd_desc lp_brightness_cmd[] = {
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_cmd1)},low_persistence_cmd1},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_on_cmd3)},low_persistence_on_cmd3},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_on_cmd4)},low_persistence_on_cmd4},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_cmd2)},low_persistence_cmd2},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 1, sizeof(low_persistence_cmd3)},low_persistence_cmd3},
+};
+
+static u32 panel_low_persistence_reg_read(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+{
+	int i = 0;
+	u32 ret = 0;
+	struct dcs_cmd_req cmdreq;
+	char *rx_buf;
+	struct dsi_cmd_desc unlock_cmd[] = {
+		{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_cmd1)},low_persistence_cmd1},
+		{{DTYPE_DCS_LWRITE, 1, 0, 0, 1, sizeof(low_persistence_cmd1_1)},low_persistence_cmd1_1},
+		};
+	struct dsi_cmd_desc lock_cmd[] = {
+		{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(low_persistence_cmd3_1)},low_persistence_cmd3_1},
+		{{DTYPE_DCS_LWRITE, 1, 0, 0, 1, sizeof(low_persistence_cmd3)},low_persistence_cmd3},
+		};
+
+	memset(&cmdreq, 0, sizeof(cmdreq));
+	cmdreq.cmds_cnt = 2;
+	cmdreq.flags = CMD_REQ_COMMIT |CMD_REQ_HS_MODE |CMD_CLK_CTRL;
+	cmdreq.rlen = 0;
+	cmdreq.cb = NULL;
+
+	rx_buf = kzalloc(27, GFP_KERNEL);
+	if (!rx_buf ) {
+		pr_err("not enough memory to hold gama parameters\n");
+		return ret;
+	}
+
+	cmdreq.cmds = unlock_cmd;
+	mdss_dsi_cmdlist_put(ctrl_pdata, &cmdreq);
+
+	mdss_dsi_panel_cmd_read(ctrl_pdata, 0xC8, 0x00, NULL, rx_buf, 4);
+	mdss_dsi_panel_cmd_read(ctrl_pdata, 0xC8, 0x00, NULL, rx_buf, 27);
+
+	cmdreq.cmds = lock_cmd;
+	mdss_dsi_cmdlist_put(ctrl_pdata, &cmdreq);
+
+	for (i=0; i<27; i++)
+		ret += rx_buf[i];			//check if read success
+	if (!ret)
+		goto read_exit;
+
+	for (i=0; i<27; i++) {
+		low_persistence_off_cmd5[i+1] = rx_buf[i];
+		low_persistence_on_cmd5[i+1] = (int)low_persistence_off_cmd5[i+1] + gama_reg_off[i];
+	}
+
+read_exit:
+	kfree(rx_buf);
+	return ret;
+}
+
+static void panel_low_persistence_brightness_set(u32 level)
+{
+	struct dcs_cmd_req cmdreq;
+	struct mdss_data_type *mdata = mdss_res;
+	struct mdss_mdp_ctl *ctl = mdata->ctl_off + 0;
+	struct mdss_panel_data *panel_data = ctl->panel_data;
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata = container_of(panel_data, struct mdss_dsi_ctrl_pdata, panel_data);
+
+	memset(&cmdreq, 0, sizeof(cmdreq));
+	cmdreq.cmds_cnt = 5;
+	cmdreq.flags = CMD_REQ_COMMIT |CMD_REQ_HS_MODE |CMD_CLK_CTRL;
+	cmdreq.rlen = 0;
+	cmdreq.cb = NULL;
+	cmdreq.cmds = lp_brightness_cmd;
+
+	switch (level) {
+	case 1:
+		low_persistence_on_cmd4[1] = 0x90;
+		low_persistence_on_cmd4[2] = 0x0E;
+		break;
+	case 3:
+		low_persistence_on_cmd4[1] = 0x70;
+		low_persistence_on_cmd4[2] = 0x0B;
+		break;
+	case 4:
+		low_persistence_on_cmd4[1] = 0x60;
+		low_persistence_on_cmd4[2] = 0x06;
+		break;
+	case 2:
+	default:
+		low_persistence_on_cmd4[1] = 0x80;
+		low_persistence_on_cmd4[2] = 0x0C;
+		break;
+	}
+
+	mdss_dsi_cmdlist_put(ctrl_pdata, &cmdreq);
+}
+
+
+static int panel_low_persistence_cmd_send(bool cmd)
+{
+	struct dcs_cmd_req cmdreq;
+	struct mdss_data_type *mdata = mdss_res;
+	struct mdss_mdp_ctl *ctl = mdata->ctl_off + 0;
+	struct mdss_panel_data *panel_data = ctl->panel_data;
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata = container_of(panel_data, struct mdss_dsi_ctrl_pdata, panel_data);
+
+	if (!arg_ready) {
+		pr_err("Gama parameters not ready, can not set low persistence mode!\n");
+		return -1;
+	}
+	memset(&cmdreq, 0, sizeof(cmdreq));
+	cmdreq.cmds_cnt = 9;
+	cmdreq.flags = CMD_REQ_COMMIT |CMD_REQ_HS_MODE |CMD_CLK_CTRL;
+	cmdreq.rlen = 0;
+	cmdreq.cb = NULL;
+
+	if (cmd) {
+		cmdreq.cmds = low_persistence_on;
+		low_persistence_on_cmd4[1] = 0x80;
+		low_persistence_on_cmd4[2] = 0x0C;
+		lp_bl_level = 2;
+	} else {
+		cmdreq.cmds = low_persistence_off;
+		lp_bl_level = 2;
+	}
+
+	mdss_dsi_cmdlist_put(ctrl_pdata, &cmdreq);
+	return 0;
+}
+
+static ssize_t panel_low_persistence_mode_show(struct class *class,
+				struct class_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%s\n", panel_low_persistence_cmd);
+}
+
+static ssize_t panel_low_persistence_mode_store(struct class *class, struct class_attribute *attr,
+			const char *buf, size_t count)
+{
+	int ret = 0;
+
+	if(!strncmp(buf, "on", 2)) {
+		ret = panel_low_persistence_cmd_send(1);
+		if (!ret) {
+			strlcpy(panel_low_persistence_cmd, buf, sizeof(panel_low_persistence_cmd) - 1);
+			pr_err("panel_low_persistence_mode   : ON \n");
+		}
+	}else if(!strncmp(buf, "off", 3)) {
+		ret = panel_low_persistence_cmd_send(0);
+		if (!ret) {
+			strlcpy(panel_low_persistence_cmd, buf, sizeof(panel_low_persistence_cmd));
+			pr_err("panel_low_persistence_mode   : OFF \n");
+		}
+	}else
+		pr_err("panel_low_persistence_mode set command error!\n");
+
+	return count;
+}
+
+static ssize_t panel_lp_brightness_show(struct class *class,
+				struct class_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", lp_bl_level);
+}
+
+static ssize_t panel_lp_brightness_store(struct class *class, struct class_attribute *attr,
+			const char *buf, size_t count)
+{
+	int ret = 0;
+	unsigned long level = 1;
+	ret = kstrtoul(buf, 10, &level);
+	if (ret) {
+		pr_err("LP mode level cmd incorrect!\n");
+		return ret;
+	}
+
+	if (!strncmp(panel_low_persistence_cmd, "on", 2)) {
+		panel_low_persistence_brightness_set(level);
+		lp_bl_level = level;
+	} else {
+		pr_err("Can not set LP brightness since LP mode not on!\n");
+	}
+
+	return count;
+}
+
+// low_persistence value attribute (/<sysfs>/class/panel_low_persistence_mode/status)
+static struct class_attribute panel_low_persistence_mode =
+	__ATTR(status, 0664, panel_low_persistence_mode_show, panel_low_persistence_mode_store);
+
+static struct class_attribute panel_lp_brightness_level =
+	__ATTR(bl_level, 0664, panel_lp_brightness_show, panel_lp_brightness_store);
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2015/12/03*/
+
+/* [FEATURE]-Mod-BEGIN by TCTNB.CY, task-1061400, 2015/12/18, enable panel HBM mode*/
+#ifdef TCT_FEATURE_PANEL_HBM
+static char hbm_cmd[] = {0x53, 0x28};
+
+static struct dsi_cmd_desc high_brightness_mode[] = {
+	{{DTYPE_DCS_WRITE1, 1, 0, 0, 0, sizeof(hbm_cmd)},hbm_cmd},
+	{{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(hbm_cmd)},hbm_cmd},
+};
+
+static void panel_hbm_cmd_send(bool cmd)
+{
+	struct dcs_cmd_req cmdreq;
+
+	struct mdss_data_type *mdata = mdss_res;
+	struct mdss_mdp_ctl *ctl = mdata->ctl_off + 0;
+	struct mdss_panel_data *panel_data = ctl->panel_data;
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata = container_of(panel_data, struct mdss_dsi_ctrl_pdata, panel_data);
+
+	memset(&cmdreq, 0, sizeof(cmdreq));
+	cmdreq.cmds_cnt = 2;
+	cmdreq.flags = CMD_REQ_COMMIT |CMD_REQ_HS_MODE |CMD_CLK_CTRL;
+	cmdreq.rlen = 0;
+	cmdreq.cb = NULL;
+	cmdreq.cmds = high_brightness_mode;
+
+	if(cmd)
+		hbm_cmd[1] = 0xe8;
+	else
+		hbm_cmd[1] = 0x28;
+
+	mdss_dsi_cmdlist_put(ctrl_pdata, &cmdreq);
+}
+
+static ssize_t panel_hbm_show(struct class *class,
+				struct class_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%s\n", panel_hbm_cur_status);
+}
+
+static ssize_t panel_hbm_store(struct class *class, struct class_attribute *attr,
+			const char *buf, size_t count)
+{
+	if (!strncmp(buf, "on", 2)) {
+		if (!strncmp(panel_hbm_thermal_status, "unlock", 6)) {
+			panel_hbm_cmd_send(1);
+			strlcpy(panel_hbm_set_status, buf, sizeof(panel_hbm_set_status) - 1);
+			strlcpy(panel_hbm_cur_status, buf, sizeof(panel_hbm_cur_status) - 1);
+			pr_err("panel_high_brightness_mode   : ON \n");
+		} else {
+			strlcpy(panel_hbm_set_status, buf, sizeof(panel_hbm_set_status) - 1);
+			pr_err("panel_high_brightness_mode   : Turn on HBM failed since thermal lock!\n");
+		}
+	} else if (!strncmp(buf, "off", 3)) {
+		if (!strncmp(panel_hbm_thermal_status, "unlock", 6)) {
+			panel_hbm_cmd_send(0);
+			strlcpy(panel_hbm_set_status, buf, sizeof(panel_hbm_set_status));
+			strlcpy(panel_hbm_cur_status, buf, sizeof(panel_hbm_cur_status));
+			pr_err("panel_high_brightness_mode   : OFF \n");
+		} else {
+			strlcpy(panel_hbm_set_status, buf, sizeof(panel_hbm_set_status));
+			pr_err("panel_high_brightness_mode   : Thermal has already turn off HBM\n");
+		}
+	} else
+		pr_err("panel_high_brightness_mode set status command error!\n");
+
+	return count;
+}
+
+static ssize_t panel_hbm_thermal_show(struct class *class,
+				struct class_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%s\n", panel_hbm_thermal_status);
+}
+
+static ssize_t panel_hbm_thermal_store(struct class *class, struct class_attribute *attr,
+			const char *buf, size_t count)
+{
+	if (!strncmp(buf, "lock", 4)) {	//if thermal on, turn off hbm and lock status
+		strlcpy(panel_hbm_thermal_status, buf, sizeof(panel_hbm_thermal_status) - 2);
+		if (!strncmp(panel_hbm_cur_status, "on", 2)) {
+			panel_hbm_cmd_send(0);
+			strlcpy(panel_hbm_cur_status, "off", sizeof(panel_hbm_cur_status));
+			pr_err("panel_high_brightness_mode   : Thermal lock, turn off hbm\n");
+		}
+	} else if (!strncmp(buf, "unlock", 6)) {	//if thermal off, return back the orig setting  and unlock status
+		if (!strncmp(panel_hbm_set_status, "on", 2)) {
+			panel_hbm_cmd_send(1);
+			strlcpy(panel_hbm_cur_status, panel_hbm_set_status, sizeof(panel_hbm_set_status));
+			pr_err("panel_high_brightness_mode   : Thermal unlock, turn on hbm\n");
+		}
+		strlcpy(panel_hbm_thermal_status, buf, sizeof(panel_hbm_thermal_status));
+	} else
+		pr_err("panel_high_brightness_mode set thermal command error!\n");
+
+	return count;
+}
+
+static struct class_attribute panel_hbm =
+	__ATTR(status, 0664, panel_hbm_show, panel_hbm_store);
+
+static struct class_attribute panel_hbm_thermal =
+	__ATTR(thermal_status, 0664, panel_hbm_thermal_show, panel_hbm_thermal_store);
+
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2015/12/18*/
+
+
+/* [FEATURE]-Mod-BEGIN by TCTSH.JHYU, task-1176273, 2015/12/17, add lcd detect statue node*/
+#ifdef FEATURE_TCTSH_LCD_DETECT
+static ssize_t panel_detect_show(struct class *class,
+				struct class_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%d\n", !lcm_is_absent);
+}
+static ssize_t panel_detect_store(struct class *class, struct class_attribute *attr,
+			const char *buf, size_t count)
+{
+	return count;
+}
+
+static struct class_attribute panel_detect =
+	__ATTR(status, 0664, panel_detect_show, panel_detect_store);
+#endif
+/* [FEATURE]-Mod-END by TCTSH.JHYU*/
 static int mdss_dsi_probe(struct platform_device *pdev)
 {
 	struct mdss_panel_cfg *pan_cfg = NULL;
@@ -2924,7 +3558,24 @@ static int mdss_dsi_probe(struct platform_device *pdev)
 	char *panel_cfg;
 	int rc = 0;
 
-	util = mdss_get_util_intf();
+/* [FEATURE]-Mod-BEGIN by TCTNB.CY, task-585318, 2015/12/03, enable panel low persistence mode*/
+#ifdef TCT_FEATURE_PANEL_LOW_PERSISTENCE
+	struct class *panel_low_persistence;
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2015/12/03*/
+
+/* [FEATURE]-Mod-BEGIN by TCTNB.CY, task-1061400, 2015/12/18, enable panel HBM mode*/
+#ifdef TCT_FEATURE_PANEL_HBM
+	struct class *class_panel_hbm;
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2015/12/18*/
+
+/* [FEATURE]-Mod-BEGIN by TCTSH.JHYU, task-1176273, 2015/12/17, add lcd detect statue node*/
+#ifdef FEATURE_TCTSH_LCD_DETECT
+	struct class *panel_detect_result;
+#endif
+/* [FEATURE]-Mod-END by TCTSH.JHYU*/	
+    util = mdss_get_util_intf();
 	if (util == NULL) {
 		pr_err("%s: Failed to get mdss utility functions\n", __func__);
 		return -ENODEV;
@@ -2983,6 +3634,57 @@ static int mdss_dsi_probe(struct platform_device *pdev)
 
 	mdss_dsi_config_clk_src(pdev);
 
+/* [FEATURE]-Mod-BEGIN by TCTNB.CY, task-585318, 2015/12/03, enable panel low persistence mode*/
+#ifdef TCT_FEATURE_PANEL_LOW_PERSISTENCE
+	/* panel_low_persistence create (/<sysfs>/class/panel_low_persistence_mode) */
+	panel_low_persistence = class_create(THIS_MODULE, "panel_low_persistence_mode");
+	if (IS_ERR(panel_low_persistence)) {
+		rc = PTR_ERR(panel_low_persistence);
+		pr_err("%s: panel_low_persistence: couldn't create class panel_low_persistence\n", __func__);
+	}
+	rc = class_create_file(panel_low_persistence, &panel_low_persistence_mode);
+	if (rc) {
+		pr_err("%s: panel_low_persistence: couldn't create file panel_low_persistence_mode\n", __func__);
+	}
+	rc = class_create_file(panel_low_persistence, &panel_lp_brightness_level);
+	if (rc) {
+		pr_err("%s: panel_low_persistence: couldn't create file panel_lp_brightness_level\n", __func__);
+	}
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2015/12/03*/
+
+/* [FEATURE]-Mod-BEGIN by TCTNB.CY, task-1061400, 2015/12/18, enable panel HBM mode*/
+#ifdef TCT_FEATURE_PANEL_HBM
+	class_panel_hbm = class_create(THIS_MODULE, "panel_high_brightness_mode");
+	if (IS_ERR(class_panel_hbm)) {
+		rc = PTR_ERR(class_panel_hbm);
+		pr_err("%s: couldn't create class panel_high_brightness_mode\n", __func__);
+	}
+	rc = class_create_file(class_panel_hbm, &panel_hbm);
+	if (rc) {
+		pr_err("%s: couldn't create file hbm status\n", __func__);
+	}
+	rc = class_create_file(class_panel_hbm, &panel_hbm_thermal);
+	if (rc) {
+		pr_err("%s: couldn't create file hbm thermal_status\n", __func__);
+	}
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2015/12/18*/
+
+/* [FEATURE]-Mod-BEGIN by TCTSH.JHYU, task-1176273, 2015/12/17, add lcd detect statue node*/
+#ifdef FEATURE_TCTSH_LCD_DETECT
+	/* panel_detect_result create (/<sysfs>/class/panel_detect_result_mode) */
+	panel_detect_result = class_create(THIS_MODULE, "panel_detect");
+	if (IS_ERR(panel_detect_result)) {
+		rc = PTR_ERR(panel_detect_result);
+		pr_err("%s: panel_detect_result: couldn't create class panel_detect_result\n", __func__);
+	}
+	rc = class_create_file(panel_detect_result, &panel_detect);
+	if (rc) {
+		pr_err("%s: panel_detect couldn't create file panel_detect\n", __func__);
+	}
+#endif
+/* [FEATURE]-Mod-END by TCTSH.JHYU*/
 error:
 	return rc;
 }
@@ -3265,6 +3967,38 @@ static int mdss_dsi_parse_gpio_params(struct platform_device *ctrl_pdev,
 							__func__, __LINE__);
 		ctrl_pdata->lcd_mode_sel_gpio = -EINVAL;
 	}
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, FR-764135, 2015/10/20, configure mpp3 pin for pmi8952 amoled power supply*/
+#if defined (CONFIG_TCT_8X76_IDOL4S) || defined (CONFIG_TCT_8X76_IDOL4S_VDF)
+	pmi8952_mpp3 = of_get_named_gpio(
+			ctrl_pdev->dev.of_node, "qcom,pmi8952-mpp3-gpio", 0);
+	if (!gpio_is_valid(pmi8952_mpp3))
+			pr_info("%s:%d, MPP3 gpio not specified\n",
+							__func__, __LINE__);
+	board_id_gpio_27 = of_get_named_gpio(
+			ctrl_pdev->dev.of_node, "qcom,board-id-gpio", 0);
+	if (!gpio_is_valid(board_id_gpio_27))
+			pr_info("%s:%d, board gpio not specified\n",
+							__func__, __LINE__);
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CY, 2015/10/20*/
+/* [FEATURE]-Mod-BEGIN by TCTSH.JHYU, task-1176273, 2015/12/17, add lcd detect statue node*/
+#ifdef FEATURE_TCTSH_LCD_DETECT
+	lcd_id0 = of_get_named_gpio(
+			ctrl_pdev->dev.of_node, "qcom,platform-ld0-gpio", 0);
+	lcd_id1 = of_get_named_gpio(
+			ctrl_pdev->dev.of_node, "qcom,platform-ld1-gpio", 0);
+	pr_info("lcd_id0 is %d,lcd_id1 is %d\n",lcd_id0,lcd_id1);
+#endif	
+/* [FEATURE]-Mod-END by TCTSH.JHYU*/
+/* [FEATURE]-Add-BEGIN by TCTNB.CY, task-1395489, 2016/01/11, enable error flag detect*/
+#ifdef CONFIG_ERR_FLAG_DETECT
+	ctrl_pdata->err_flag_gpio = of_get_named_gpio(
+			ctrl_pdev->dev.of_node, "qcom,err-flag-gpio", 0);
+	if (!gpio_is_valid(ctrl_pdata->err_flag_gpio))
+			pr_info("%s:%d, error flag gpio not specified\n",
+							__func__, __LINE__);
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2016/01/11*/
 
 	return 0;
 }
@@ -3325,7 +4059,11 @@ int dsi_panel_device_register(struct platform_device *ctrl_pdev,
 						__func__, rc);
 		return rc;
 	}
-
+/* [FEATURE]-Mod-BEGIN by TCTSH.JHYU, task-1176273, 2015/12/17, add lcd detect statue node*/
+#ifdef FEATURE_TCTSH_LCD_DETECT
+   lcd_id_detect();
+#endif
+/* [FEATURE]-Mod-END by TCTSH.JHYU*/
 	if (mdss_dsi_link_clk_init(ctrl_pdev, ctrl_pdata)) {
 		pr_err("%s: unable to initialize Dsi ctrl clks\n", __func__);
 		return -EPERM;

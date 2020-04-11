@@ -2023,7 +2023,7 @@ static int qpnp_pwm_probe(struct spmi_device *spmi)
 {
 	struct qpnp_pwm_chip	*pwm_chip;
 	int			rc;
-
+        u8 reg;//sun zhangyang add for pwm
 	pwm_chip = kzalloc(sizeof(*pwm_chip), GFP_KERNEL);
 	if (pwm_chip == NULL) {
 		pr_err("kzalloc() failed.\n");
@@ -2053,6 +2053,12 @@ static int qpnp_pwm_probe(struct spmi_device *spmi)
 
 	if (pwm_chip->channel_owner)
 		pwm_chip->chip.pwms[0].label = pwm_chip->channel_owner;
+       /*sun zhangyang add for pwm begin*/
+        reg = 0xa5;
+        rc = spmi_ext_register_writel(pwm_chip->spmi_dev->ctrl, pwm_chip->spmi_dev->sid, pwm_chip->lpg_config.base_addr+0xD0, &reg, 1);
+        reg = 1;
+        rc = spmi_ext_register_writel(pwm_chip->spmi_dev->ctrl, pwm_chip->spmi_dev->sid, pwm_chip->lpg_config.base_addr+0xE2, &reg, 1);
+       /*sun zhangyang add for pwm end*/
 
 	return 0;
 

@@ -28,7 +28,13 @@
 #include <linux/atomic.h>
 
 #define UEVENT_HELPER_PATH_LEN		256
-#define UEVENT_NUM_ENVP			32	/* number of env pointers */
+//sun zhangyang add for task 1472711 begin,2016.01.22
+#if defined(CONFIG_TCT_8X76_IDOL4)
+  #define UEVENT_NUM_ENVP			34	/* number of env pointers */
+#else
+  #define UEVENT_NUM_ENVP			32	/* number of env pointers */
+#endif
+//sun zhangyang add for task 1472711 end,2016.01.22
 #define UEVENT_BUFFER_SIZE		2048	/* buffer for the variables */
 
 /* path to the userspace helper executed on an event */

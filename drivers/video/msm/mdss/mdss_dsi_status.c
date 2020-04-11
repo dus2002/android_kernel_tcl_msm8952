@@ -100,6 +100,43 @@ irqreturn_t hw_vsync_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+/* [FEATURE]-Add-BEGIN by TCTNB.CY, task-1395489, 2016/01/11, enable error flag detect*/
+#ifdef CONFIG_ERR_FLAG_DETECT
+/*
+ * panel_err_flag_handler() - Interrupt handler for panel error flag.
+ * @irq		: irq line number
+ * @data	: Pointer to the device structure.
+ *
+ * This function is called whenever a panel error flag signal is received from the panel.
+ */
+irqreturn_t panel_err_flag_handler(int irq, void *data)
+{
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata =
+			(struct mdss_dsi_ctrl_pdata *)data;
+	struct mdss_data_type *mdata = mdss_res;
+	struct mdss_mdp_ctl *ctl = mdata->ctl_off + 0;
+
+	if (!ctrl_pdata) {
+		pr_err("%s: DSI ctrl not available\n", __func__);
+		return IRQ_HANDLED;
+	}
+
+	pstatus_data->mfd = ctl->mfd;
+
+	if (pstatus_data)
+		mod_delayed_work(system_wq, &pstatus_data->check_status,
+			msecs_to_jiffies(300));		//recovery at 300 ms
+	else
+		pr_err("%s: Pstatus data is NULL\n", __func__);
+
+	if (!atomic_read(&ctrl_pdata->err_flag_ready))
+		atomic_inc(&ctrl_pdata->err_flag_ready);
+
+	return IRQ_HANDLED;
+}
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2016/01/11*/
+
 /*
  * fb_event_callback() - Call back function for the fb_register_client()
  *			 notifying events

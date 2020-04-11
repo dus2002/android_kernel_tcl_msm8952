@@ -2727,6 +2727,10 @@ static int msm_compr_app_type_cfg_put(struct snd_kcontrol *kcontrol,
 	acdb_dev_id = ucontrol->value.integer.value[1];
 	if (0 != ucontrol->value.integer.value[2])
 		sample_rate = ucontrol->value.integer.value[2];
+#ifndef CONFIG_SND_44P1K_SUPPORT/*TCT-NB Tianhongwei add for slave mode &44.1k support*/
+	if(sample_rate == 44100)
+		sample_rate = 48000;
+#endif
 	pr_debug("%s: app_type- %d acdb_dev_id- %d sample_rate- %d\n",
 		__func__, app_type, acdb_dev_id, sample_rate);
 	msm_pcm_routing_reg_stream_app_type_cfg(fe_id, app_type,

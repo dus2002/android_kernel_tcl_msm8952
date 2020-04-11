@@ -86,7 +86,9 @@
 #ifdef CONFIG_X86_LOCAL_APIC
 #include <asm/smp.h>
 #endif
-
+//add dev/bootprof by gtguo for defect 1398221 begin 
+#include <linux/bootprof.h>
+//add dev/bootprof by gtguo for defect 1398221 end 
 static int kernel_init(void *);
 
 extern void init_IRQ(void);
@@ -512,6 +514,12 @@ asmlinkage void __init start_kernel(void)
 	build_all_zonelists(NULL, NULL);
 	page_alloc_init();
 
+/* [PLATFORM]-ADD-BEGIN by TCTNB.WJ, FR-1058987, 2015/12/22, add log for autotest */
+#ifdef CONFIG_TCT_8X76_COMMON
+	pr_err("TCTNB_POWERON start_kernel: boots up to kernel!\n");
+#endif
+/* [PLATFORM]-ADD-END by TCTNB.WJ */
+
 	pr_notice("Kernel command line: %s\n", boot_command_line);
 	parse_early_param();
 	parse_args("Booting kernel", static_command_line, __start___param,
@@ -828,7 +836,9 @@ static int __ref kernel_init(void *unused)
 	numa_default_policy();
 
 	flush_delayed_fput();
-
+//add dev/bootprof by gtguo for defect 1398221 begin 
+	log_boot("Kernel_init_done");
+//add dev/bootprof by gtguo for defect 1398221 end 
 	if (ramdisk_execute_command) {
 		if (!run_init_process(ramdisk_execute_command))
 			return 0;

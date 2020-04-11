@@ -14,7 +14,9 @@
 # Based on the ia64 boot/Makefile.
 #
 
+ifdef CONFIG_TCT_8X76_COMMON
 include $(srctree)/arch/arm64/boot/dts/qcom/Makefile
+endif
 
 targets := Image Image.gz
 
@@ -25,6 +27,7 @@ else
 DTB_LIST := $(dtb-y)
 endif
 DTB_OBJS := $(addprefix $(obj)/dts/,$(DTB_LIST))
+
 
 $(obj)/Image: vmlinux FORCE
 	$(call if_changed,objcopy)

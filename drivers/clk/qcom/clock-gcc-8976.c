@@ -1124,12 +1124,12 @@ static struct rcg_clk byte1_clk_src = {
 		CLK_INIT(byte1_clk_src.c),
 	},
 };
-
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, FR-717274, 2015/10/19,removed for not need change mipi freq, change to default*/
 static struct clk_freq_tbl ftbl_esc0_clk_src[] = {
 	F(  19200000,             xo,    1,    0,     0),
 	F_END
 };
-
+/* [PLATFORM]-Mod-END by TCTNB.CY,  2015/10/19*/
 static struct rcg_clk esc0_clk_src = {
 	.cmd_rcgr_reg = ESC0_CMD_RCGR,
 	.set_rate = set_rate_hid,
@@ -1143,12 +1143,12 @@ static struct rcg_clk esc0_clk_src = {
 		CLK_INIT(esc0_clk_src.c),
 	},
 };
-
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, FR-717274, 2015/10/19,removed for not need change mipi freq, change to default*/
 static struct clk_freq_tbl ftbl_esc1_clk_src[] = {
 	F(  19200000,             xo,    1,    0,     0),
 	F_END
 };
-
+/* [PLATFORM]-Mod-END by TCTNB.CY,  2015/10/19*/
 static struct rcg_clk esc1_clk_src = {
 	.cmd_rcgr_reg = ESC1_CMD_RCGR,
 	.set_rate = set_rate_hid,

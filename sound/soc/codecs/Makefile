@@ -148,6 +148,22 @@ obj-$(CONFIG_SND_SOC_MSM_HDMI_CODEC_RX) := msm_hdmi_codec_rx.o
 snd-soc-max9877-objs := max9877.o
 snd-soc-tpa6130a2-objs := tpa6130a2.o
 
+# [Task]-Modified-BEGIN by TCTSH.Cedar, 1784755, 2016/03/11, idol4 only use ak4375
+snd-soc-ak4375-objs := akm/ak4375.o
+# [Task]-Modified-END   by TCTSH.Cedar, 1784755, 2016/03/11, idol4 only use ak4375
+
+#Begin for akm ak4376 and nxp tfa9890 codec driver, by Kun.Guan & Xing.Wang, 2015-08-26
+#Hifi codec, akm, ak4736
+# [FEATURE]-Add-BEGIN by TCTSH.Cedar, 988925, 2015/11/27, compatible with ak4375 and ak4376
+#/*[BUG]-Add-START   by TCTSH.YK, 1097898 , 2015/12/10, The audio can not heard from headset
+#Because proto2 and proto3 will use ak4375 ,so it is better to probe ak4375 first ,ignore ak4376
+snd-soc-ak4376-objs := akm/ak4376.o
+#[BUG]-Add-START   by TCTSH.YK, 1097898 , 2015/12/10, The audio can not heard from headset
+# [FEATURE]-Add-END   by TCTSH.Cedar, 988925, 2015/11/27, compatible with ak4375 and ak4376
+#smart pa, nxp, tfa9890
+snd-soc-tfa9890-objs := nxp/tfa9890.o
+#End for akm ak4376 and nxp tfa9890 codec driver, by Kun.Guan & Xing.Wang, 2015-08-26
+
 obj-$(CONFIG_SND_SOC_88PM860X)	+= snd-soc-88pm860x.o
 obj-$(CONFIG_SND_SOC_AB8500_CODEC)	+= snd-soc-ab8500-codec.o
 obj-$(CONFIG_SND_SOC_AC97_CODEC)	+= snd-soc-ac97.o
@@ -287,3 +303,14 @@ obj-$(CONFIG_SND_SOC_MSM_STUB)  += snd-soc-msm-stub.o
 # Amp
 obj-$(CONFIG_SND_SOC_MAX9877)	+= snd-soc-max9877.o
 obj-$(CONFIG_SND_SOC_TPA6130A2)	+= snd-soc-tpa6130a2.o
+
+# [Task]-Modified-BEGIN by TCTSH.Cedar, 1784755, 2016/03/11, idol4 only use ak4375
+obj-$(CONFIG_SND_SOC_AK4375) += snd-soc-ak4375.o
+# [Task]-Modified-END   by TCTSH.Cedar, 1784755, 2016/03/11, idol4 only use ak4375
+
+#Begin for akm ak4376 and nxp tfa9890 codec driver, by Kun.Guan & Xing.Wang, 2015-08-26
+#akm, hifi codec
+obj-$(CONFIG_SND_SOC_AK4376) += snd-soc-ak4376.o
+#NXP, smart pa, TODO:check whether it is needed
+obj-$(CONFIG_SND_SOC_TFA9890)  += snd-soc-tfa9890.o
+#End for akm ak4376 and nxp tfa9890 codec driver, by Kun.Guan & Xing.Wang, 2015-08-26

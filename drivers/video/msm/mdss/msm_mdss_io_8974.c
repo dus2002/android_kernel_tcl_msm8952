@@ -964,12 +964,12 @@ static void mdss_dsi_link_clk_unprepare(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 	clk_unprepare(ctrl_pdata->byte_clk);
 	clk_unprepare(ctrl_pdata->esc_clk);
 }
-
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, FR-717274, 2015/10/19, removed for not need change mipi freq,change to default*/
 static int mdss_dsi_link_clk_set_rate(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
 	u32 esc_clk_rate = 19200000;
 	int rc = 0;
-
+/* [PLATFORM]-Mod-END by TCTNB.CY,  2015/10/19*/
 	if (ctrl_pdata->panel_data.panel_info.cont_splash_enabled) {
 		pr_debug("%s: cont splash enabled, not setting rate\n",
 			__func__);

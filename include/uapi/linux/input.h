@@ -476,6 +476,17 @@ struct input_keymap_entry {
 
 #define KEY_MICMUTE		248	/* Mute / unmute the microphone */
 
+/*[FEATURE]-Add-BEGIN by TCTNB.QW, 526575, 2015/09/02, add HALL for Idol4_pro*/
+#define KEY_UNLOCK		249
+#define KEY_UNLOCK_COVER        250     /* 250, for LED/window cover type, unlock  */
+#define KEY_LOCK_LED_COVER      251     /* 251, for LED cover type, lock  */
+/*[FEATURE]-Add-END by TCTNB.QW, 526575, 2015/09/02, add HALL for Idol4_pro*/
+
+/*[FEATURE]-Add-BEGIN by TCTSH.Cedar, 526254, 2015/10/22, for VR device detection*/
+#define KEY_VR_REMOVED		252
+#define KEY_VR_DETECTED		253
+/*[FEATURE]-Add-BEGIN by TCTSH.Cedar, 526254, 2015/09/23, for VR device detection*/
+#define KEY_GESTURE		254    // TCTNB.YQJ add for tp gesture event 2015/11/13
 /* Code 255 is reserved for special needs of AT keyboard driver */
 
 #define BTN_MISC		0x100

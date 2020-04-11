@@ -1288,6 +1288,25 @@ static struct snd_soc_dai_driver msm_fe_dais[] = {
 		.name = "VoiceMMode2",
 		.probe = fe_dai_probe,
 	},
+//Begin for FM, add radio path, by Kun.Guan & Xing.Wang, 2015-08-26
+#ifdef CONFIG_SND_TCT_IDOL4_FM
+	{
+		.playback = {
+			.stream_name = "Quinary MI2S_RX Hostless Playback",
+			.aif_name = "QUIN_MI2S_DL_HL",
+			.rates = SNDRV_PCM_RATE_8000_48000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min = 	8000,
+			.rate_max =    48000,
+		},
+		.ops = &msm_fe_dai_ops,
+		.name = "QUIN_MI2S_RX_HOSTLESS",
+		.probe = fe_dai_probe,
+	},
+#endif
+//End for FM, add radio path, by Kun.Guan & Xing.Wang, 2015-08-26
 };
 
 static int msm_fe_dai_dev_probe(struct platform_device *pdev)

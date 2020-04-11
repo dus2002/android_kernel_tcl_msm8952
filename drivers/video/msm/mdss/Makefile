@@ -1,5 +1,9 @@
 ccflags-y += -I$(src)
 
+ifeq ($(CONFIG_TCT_8X76_IDOL4), y)
+KBUILD_CFLAGS += -DFEATURE_TCTSH_LCD_DETECT
+endif
+
 obj-$(CONFIG_FB_MSM_MDSS_MHL3) += mhl3/
 
 mdss-mdp3-objs = mdp3.o mdp3_dma.o mdp3_ctrl.o dsi_status_v2.o

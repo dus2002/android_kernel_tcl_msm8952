@@ -350,6 +350,7 @@ struct wcd_mbhc_cb {
 	void (*mbhc_bias)(struct snd_soc_codec *, bool);
 	void (*mbhc_common_micb_ctrl)(struct snd_soc_codec *,
 				      int event, bool);
+	void (*mbhc_micb2_2v7_ctrl)(struct snd_soc_codec *,bool en);
 	void (*micb_internal)(struct snd_soc_codec *,
 			int micb_num, bool);
 	bool (*hph_pa_on_status)(struct snd_soc_codec *);
@@ -410,6 +411,9 @@ struct wcd_mbhc {
 
 	/* Holds type of Headset - Mono/Stereo */
 	enum wcd_mbhc_hph_type hph_type;
+	/*Begin_add TCTSH@YK , Defect:1119400 ,2016/01/05, Not support wired selfie stick capture*/
+	enum wcd_mbhc_plug_type frist_type;
+	/*End_add TCTSH@YK , Defect:1119400 ,2016/01/05, Not support wired selfie stick capture*/
 
 	struct snd_soc_jack headset_jack;
 	struct snd_soc_jack button_jack;

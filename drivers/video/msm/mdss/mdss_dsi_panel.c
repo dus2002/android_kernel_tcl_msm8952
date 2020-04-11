@@ -40,6 +40,21 @@ static char rc_range_max_qp[] = {4, 4, 5, 6, 7, 7, 7, 8, 9, 10, 11, 12,
 	13, 13, 15};
 static char rc_range_bpg_offset[] = {2, 0, 0, -2, -4, -6, -8, -8, -8, -10, -10,
 	-12, -12, -12, -12};
+/*TCTNB.YQJ MODIFIED BEGIN, defect-1552131, tp still work after screen black,2016/02/04 */
+#if (defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF) || defined(CONFIG_TCT_8X76_IDOL4))
+extern void set_backlight_level_for_tp(int level);
+#endif
+/*TCTNB.YQJ MODIFIED END*/
+/* [FEATURE]-Mod-BEGIN by TCTNB.CY, task-1030268, 2015/12/03, Touch panel FHD&WQHD Compatible*/
+#ifdef CONFIG_TCT_8X76_IDOL4S
+static u32 panel_res_type = 1;
+u32 panel_res_type_select(void)
+{
+	return panel_res_type;
+}
+EXPORT_SYMBOL_GPL(panel_res_type_select);
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2015/12/03*/
 
 void mdss_dsi_panel_pwm_cfg(struct mdss_dsi_ctrl_pdata *ctrl)
 {
@@ -140,6 +155,11 @@ u32 mdss_dsi_panel_cmd_read(struct mdss_dsi_ctrl_pdata *ctrl, char cmd0,
 	cmdreq.cmds = &dcs_read_cmd;
 	cmdreq.cmds_cnt = 1;
 	cmdreq.flags = CMD_REQ_RX | CMD_REQ_COMMIT;
+/* [FEATURE]-Mod-BEGIN by TCTNB.CY, task-1379356, 2016/01/08, read gama parameter on hs mode*/
+#ifdef TCT_FEATURE_PANEL_LOW_PERSISTENCE
+	cmdreq.flags |= CMD_REQ_HS_MODE;
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2016/01/08*/
 	cmdreq.rlen = len;
 	cmdreq.rbuf = rbuf;
 	cmdreq.cb = fxn; /* call back */
@@ -180,12 +200,30 @@ static void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
 }
 
+/* [BUGFIX]-Mod-BEGIN by TCTNB.CY, PR-1048316, 2016/01/13, change brightness dimming mode when panel on*/
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+void mdss_dsi_panel_change_dimming(struct work_struct *work);
+static DECLARE_DELAYED_WORK(dimming_change_work, mdss_dsi_panel_change_dimming);
+static bool dimming_change = true;
+#endif
+/* [BUGFIX]-Mod-END by TCTNB.CY, 2016/01/13*/
+
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, FR-526579, 2015/10/20, modify for send backlight cmd more stably*/
+/* [PLATFORM]-Mod-BEGIN by TCTCD.CF feichen@tcl.com, task-863891, 2015/11/05, modify for send backlight cmd more stably*/
 static char led_pwm1[2] = {0x51, 0x0};	/* DTYPE_DCS_WRITE1 */
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+static struct dsi_cmd_desc backlight_cmd[] = {
+	{{DTYPE_DCS_WRITE1, 1, 0, 0, 0, sizeof(led_pwm1)},led_pwm1},
+	{{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm1)},led_pwm1},
+};
+#else
 static struct dsi_cmd_desc backlight_cmd = {
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm1)},
 	led_pwm1
 };
-
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CF, 2015/11/05*/
+/* [PLATFORM]-Mod-END by TCTNB.CY, 2015/10/20*/
 static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 {
 	struct dcs_cmd_req cmdreq;
@@ -198,17 +236,48 @@ static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 	}
 
 	pr_debug("%s: level=%d\n", __func__, level);
-
+/*TCTNB.YQJ MODIFIED BEGIN, defect-1552131, tp still work after screen black,2016/02/04 */
+#if (defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF))
+		set_backlight_level_for_tp(level);
+#endif
+/*TCTNB.YQJ MODIFIED END*/
 	led_pwm1[1] = (unsigned char)level;
 
 	memset(&cmdreq, 0, sizeof(cmdreq));
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, FR-526579, 2015/10/20, modify for send backlight cmd more stably*/
+/* [PLATFORM]-Mod-BEGIN by TCTCD.CF feichen@tcl.com, task-863891, 2015/11/05, modify for send backlight cmd more stably*/
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	cmdreq.cmds = backlight_cmd;
+	cmdreq.cmds_cnt = 2;
+#else
 	cmdreq.cmds = &backlight_cmd;
 	cmdreq.cmds_cnt = 1;
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CF, 2015/11/05*/
+/* [PLATFORM]-Mod-END by TCTNB.CY, 2015/10/20*/
 	cmdreq.flags = CMD_REQ_COMMIT | CMD_CLK_CTRL;
+/* [BUGFIX]-Mod-BEGIN by TCTNB.CY, task-988883, 2015/11/27, change send cmd mode to hs mode*/
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	cmdreq.flags |= CMD_REQ_HS_MODE;
+#endif
+/* [BUGFIX]-Mod-END by TCTNB.CY, 2015/11/27*/
 	cmdreq.rlen = 0;
 	cmdreq.cb = NULL;
 
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+
+/* [BUGFIX]-Mod-BEGIN by TCTNB.CY, PR-1048316, 2016/01/13, change brightness dimming mode when panel on*/
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	if (level && dimming_change) {
+		schedule_delayed_work(&dimming_change_work,
+				msecs_to_jiffies(100));
+		dimming_change = false;
+	} else if (0 == level) {
+		cancel_delayed_work_sync(&dimming_change_work);
+		dimming_change = true;
+	}
+#endif
+/* [BUGFIX]-Mod-END by TCTNB.CY, 2016/01/13*/
 }
 
 static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
@@ -611,7 +680,9 @@ static void mdss_dsi_panel_switch_mode(struct mdss_panel_data *pdata,
 
 	return;
 }
-
+#ifdef FEATURE_TCTSH_LCD_DETECT
+extern bool lcm_is_absent;
+#endif
 static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 							u32 bl_level)
 {
@@ -631,10 +702,23 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 	 * for the backlight brightness. If the brightness is less
 	 * than it, the controller can malfunction.
 	 */
+//[BUGFIX]-Add-Begin by TCTSH xingchen.wang, defect 1546333 , tp still report points during TP-suspend period, 2016/02/19
+#if defined(CONFIG_TCT_8X76_IDOL4)
+	set_backlight_level_for_tp(bl_level);
+#endif
+//[BUGFIX]-Add-End by TCTSH xingchen.wang, defect 1546333, 2016/02/19
 
 	if ((bl_level < pdata->panel_info.bl_min) && (bl_level != 0))
 		bl_level = pdata->panel_info.bl_min;
-
+/* [FEATURE]-Mod-BEGIN by TCTSH.JHYU, task-1190538, 2015/12/19, disable backlight*/
+	#ifdef FEATURE_TCTSH_LCD_DETECT
+    if(lcm_is_absent)
+    {
+    	bl_level = 0;
+    	pr_err("jhyu mini version disable bl while lcd absent\n");
+    }
+/* [FEATURE]-Mod-END*/
+    #endif
 	switch (ctrl_pdata->bklt_ctrl) {
 	case BL_WLED:
 		led_trigger_event(bl_led_trigger, bl_level);
@@ -1387,8 +1471,8 @@ static int mdss_dsi_gen_read_status(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 	for (i = 0; i < ctrl_pdata->status_cmds_rlen; i++) {
 		if (!mdss_dsi_cmp_panel_reg(ctrl_pdata->status_buf,
 					ctrl_pdata->status_value, i)) {
-			pr_err("%s: Read back value from panel is incorrect\n",
-					__func__);
+			pr_err("%s: Read back value 0x%x from panel is incorrect\n",
+					__func__,ctrl_pdata->status_buf.data[0]);//TCT-SH jhyu fix 1170747_add esd check log 12-16-2015
 			return -EINVAL;
 		}
 	}
@@ -2191,6 +2275,14 @@ int mdss_dsi_panel_init(struct device_node *node,
 		pr_info("%s: Panel Name = %s\n", __func__, panel_name);
 		strlcpy(&pinfo->panel_name[0], panel_name, MDSS_MAX_PANEL_LEN);
 	}
+/* [FEATURE]-Mod-BEGIN by TCTNB.CY, task-1030268, 2015/12/03, Touch panel FHD&WQHD Compatible*/
+#ifdef CONFIG_TCT_8X76_IDOL4S
+	if (!strncmp(panel_name, "S6e3fa3 amoled", 14))
+		panel_res_type = 0;		//FHD
+	else
+		panel_res_type = 1;		//WQHD
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2015/12/03*/
 	rc = mdss_panel_parse_dt(node, ctrl_pdata);
 	if (rc) {
 		pr_err("%s:%d panel dt parse failed\n", __func__, __LINE__);

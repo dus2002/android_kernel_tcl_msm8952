@@ -148,7 +148,9 @@
 		mdss_fb0: qcom,mdss_fb_primary {
 			cell-index = <0>;
 			compatible = "qcom,mdss-fb";
-			qcom,mdss-fb-splash-logo-enabled;
+			/* [PLATFORM]-Mod-BEGIN by TCTNB.xin.peng, Task:894769 , 2015/11/16, lk splash logo display contonuously in kernel*/
+			//qcom,mdss-fb-splash-logo-enabled;
+			/* [PLATFORM]-Mod-END by TCTNB.xin.peng */
 			qcom,cont-splash-memory {
 				linux,contiguous-region = <&cont_splash_mem>;
 			};

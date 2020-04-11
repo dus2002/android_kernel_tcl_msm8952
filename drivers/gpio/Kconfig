@@ -2,6 +2,11 @@
 # GPIO infrastructure and drivers
 #
 
+config TCT_TARGET_WCNSS_NV_CA
+	tristate "distingush CA and NON-CA"
+	help
+	  check CA and NON-CA
+
 config ARCH_HAVE_CUSTOM_GPIO_H
 	bool
 	help
@@ -729,5 +734,13 @@ config GPIO_VIPERBOARD
           See viperboard API specification and Nano
           River Tech's viperboard.h for detailed meaning
           of the module parameters.
+
+#[PLATFORM]-add Begin by TCTNB.ZXZ,2015/12/02,PR-665685,for GPIO NPI DOWN
+config GPIO_NPI_DOWN_STATUS
+         tristate "NPI Down status"
+         help
+           Say 'y' here to include debug support for the Qualcomm
+           QPNP gpio status.
+#[PLATFORM]-add End by TCTNB.ZXZ,2015/12/02
 
 endif

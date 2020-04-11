@@ -2887,6 +2887,19 @@ static int msm_dai_q6_mi2s_prepare(struct snd_pcm_substream *substream,
 		"dai_data->channels = %u sample_rate = %u\n", __func__,
 		dai->id, port_id, dai_data->channels, dai_data->rate);
 
+//Begin for QUAT I2S Clock is control by HAL nxp tfa9890, by Kun.Guan & Xing.Wang, 2015-08-26
+#ifdef CONFIG_SND_TCT_IDOL4_QUAT_I2S_HAL_CTL
+    /*
+     * FIXME TODO check this in QUTER RX TX both work
+     * */
+    if (port_id == AFE_PORT_ID_QUATERNARY_MI2S_RX)  {
+        pr_debug("\n\n#B %s smartpa control clock, ignor QUAT afe open\n", __func__);
+        return 0;
+    }
+#endif
+//End for QUAT I2S Clock is control by HAL nxp tfa9890, by Kun.Guan & Xing.Wang, 2015-08-26
+
+
 	if (!test_bit(STATUS_PORT_STARTED, dai_data->status_mask)) {
 		/* PORT START should be set if prepare called
 		 * in active state.
@@ -3109,6 +3122,18 @@ static void msm_dai_q6_mi2s_shutdown(struct snd_pcm_substream *substream,
 		dev_err(dai->dev, "%s: Invalid Port ID 0x%x\n",
 				__func__, port_id);
 	}
+
+//Begin for QUAT I2S Clock is control by HAL nxp tfa9890, by Kun.Guan & Xing.Wang, 2015-08-26
+#ifdef CONFIG_SND_TCT_IDOL4_QUAT_I2S_HAL_CTL
+    /*
+     * FIXME TODO check this in QUTER RX TX both work
+     * */
+    if (port_id == AFE_PORT_ID_QUATERNARY_MI2S_RX)  {
+        pr_debug("\n\n#B %s smartpa control clock, ignor QUAT afe close\n", __func__);
+        return;
+    }
+#endif
+//End for QUAT I2S Clock is control by HAL nxp tfa9890, by Kun.Guan & Xing.Wang, 2015-08-26
 
 	dev_dbg(dai->dev, "%s: closing afe port id = 0x%x\n",
 			__func__, port_id);

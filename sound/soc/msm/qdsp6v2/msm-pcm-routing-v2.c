@@ -63,7 +63,7 @@ static int lsm_mux_slim_port;
 static int slim0_rx_aanc_fb_port;
 static int msm_route_ec_ref_rx = 9; /* NONE */
 static uint32_t voc_session_id = ALL_SESSION_VSID;
-static int msm_route_ext_ec_ref = AFE_PORT_INVALID;
+static int msm_route_ext_ec_ref = 0;/*TCT-NB Tianhongwei add for echo reference*/
 static bool is_custom_stereo_on;
 static bool is_ds2_on;
 
@@ -1587,6 +1587,10 @@ static int msm_routing_ec_ref_rx_put(struct snd_kcontrol *kcontrol,
 		msm_route_ec_ref_rx = 10;
 		ec_ref_port_id = SLIMBUS_1_TX;
 		break;
+	case 11:/*TCT-NB Tianhongwei add for echo reference*/
+		msm_route_ec_ref_rx = 11;
+		ec_ref_port_id = AFE_PORT_ID_QUATERNARY_MI2S_RX;
+		break;
 	default:
 		msm_route_ec_ref_rx = 0; /* NONE */
 		pr_err("%s EC ref rx %ld not valid\n",
@@ -1605,9 +1609,9 @@ static int msm_routing_ec_ref_rx_put(struct snd_kcontrol *kcontrol,
 static const char *const ec_ref_rx[] = { "None", "SLIM_RX", "I2S_RX",
 	"PRI_MI2S_TX", "SEC_MI2S_TX",
 	"TERT_MI2S_TX", "QUAT_MI2S_TX", "SEC_I2S_RX", "PROXY_RX",
-	"SLIM_5_RX", "SLIM_1_TX"};
+	"SLIM_5_RX", "SLIM_1_TX","QUAT_I2S_RX"};/*TCT-NB Tianhongwei add for echo reference*/
 static const struct soc_enum msm_route_ec_ref_rx_enum[] = {
-	SOC_ENUM_SINGLE_EXT(11, ec_ref_rx),
+	SOC_ENUM_SINGLE_EXT(12, ec_ref_rx),/*TCT-NB Tianhongwei add for echo reference*/
 };
 
 static const struct snd_kcontrol_new ext_ec_ref_mux_ul1 =
@@ -1665,6 +1669,7 @@ static int msm_routing_ext_ec_put(struct snd_kcontrol *kcontrol,
 	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
 	int ret = 0;
 	bool state = false;
+	int ext_ec_ref_port_id;/*TCT-NB Tianhongwei add for echo reference*/
 
 	pr_debug("%s: msm_route_ec_ref_rx = %d value = %ld\n",
 		 __func__, msm_route_ext_ec_ref,
@@ -1677,30 +1682,36 @@ static int msm_routing_ext_ec_put(struct snd_kcontrol *kcontrol,
 	mutex_lock(&routing_lock);
 	switch (ucontrol->value.integer.value[0]) {
 	case EC_PORT_ID_PRIMARY_MI2S_TX:
-		msm_route_ext_ec_ref = AFE_PORT_ID_PRIMARY_MI2S_TX;
+		ext_ec_ref_port_id = AFE_PORT_ID_PRIMARY_MI2S_TX;/*TCT-NB Tianhongwei add for echo reference*/
+		msm_route_ext_ec_ref = EC_PORT_ID_PRIMARY_MI2S_TX;/*TCT-NB Tianhongwei add for echo reference*/
 		state = true;
 		break;
 	case EC_PORT_ID_SECONDARY_MI2S_TX:
-		msm_route_ext_ec_ref = AFE_PORT_ID_SECONDARY_MI2S_TX;
+		ext_ec_ref_port_id = AFE_PORT_ID_SECONDARY_MI2S_TX;/*TCT-NB Tianhongwei add for echo reference*/
+		msm_route_ext_ec_ref = EC_PORT_ID_SECONDARY_MI2S_TX;/*TCT-NB Tianhongwei add for echo reference*/
 		state = true;
 		break;
 	case EC_PORT_ID_TERTIARY_MI2S_TX:
-		msm_route_ext_ec_ref = AFE_PORT_ID_TERTIARY_MI2S_TX;
+		ext_ec_ref_port_id = AFE_PORT_ID_TERTIARY_MI2S_TX;/*TCT-NB Tianhongwei add for echo reference*/
+		msm_route_ext_ec_ref = EC_PORT_ID_TERTIARY_MI2S_TX;/*TCT-NB Tianhongwei add for echo reference*/
 		state = true;
 		break;
 	case EC_PORT_ID_QUATERNARY_MI2S_TX:
-		msm_route_ext_ec_ref = AFE_PORT_ID_QUATERNARY_MI2S_TX;
+		ext_ec_ref_port_id = AFE_PORT_ID_QUATERNARY_MI2S_TX;/*TCT-NB Tianhongwei add for echo reference*/
+		msm_route_ext_ec_ref = EC_PORT_ID_QUATERNARY_MI2S_TX;/*TCT-NB Tianhongwei add for echo reference*/
 		state = true;
 		break;
 	case EC_PORT_ID_SLIMBUS_1_TX:
-		msm_route_ext_ec_ref = SLIMBUS_1_TX;
+		ext_ec_ref_port_id = SLIMBUS_1_TX;/*TCT-NB Tianhongwei add for echo reference*/
+		msm_route_ext_ec_ref = EC_PORT_ID_SLIMBUS_1_TX;/*TCT-NB Tianhongwei add for echo reference*/
 		state = true;
 		break;
 	default:
-		msm_route_ext_ec_ref = AFE_PORT_INVALID;
+		ext_ec_ref_port_id = AFE_PORT_INVALID;/*TCT-NB Tianhongwei add for echo reference*/
+		msm_route_ext_ec_ref = 0;/*TCT-NB Tianhongwei add for echo reference*/
 		break;
 	}
-	if (!voc_set_ext_ec_ref(msm_route_ext_ec_ref, state)) {
+	if (!voc_set_ext_ec_ref(ext_ec_ref_port_id, state)) {/*TCT-NB Tianhongwei add for echo reference*/
 		mutex_unlock(&routing_lock);
 		snd_soc_dapm_mux_update_power(widget, kcontrol, mux, e);
 	} else {
@@ -3173,6 +3184,14 @@ static const struct snd_kcontrol_new quin_mi2s_rx_voice_mixer_controls[] = {
 	SOC_SINGLE_EXT("QCHAT", MSM_BACKEND_DAI_QUINARY_MI2S_RX,
 	MSM_FRONTEND_DAI_QCHAT, 1, 0, msm_routing_get_voice_mixer,
 	msm_routing_put_voice_mixer),
+	/*[FEATURE]-Add-BEGIN by kun.guan, 526254, 2015/10/28, add for new voice session*/
+	SOC_SINGLE_EXT("VoiceMMode1", MSM_BACKEND_DAI_QUINARY_MI2S_RX,
+	MSM_FRONTEND_DAI_VOICEMMODE1, 1, 0, msm_routing_get_voice_mixer,
+	msm_routing_put_voice_mixer),
+	SOC_SINGLE_EXT("VoiceMMode2", MSM_BACKEND_DAI_QUINARY_MI2S_RX,
+	MSM_FRONTEND_DAI_VOICEMMODE2, 1, 0, msm_routing_get_voice_mixer,
+	msm_routing_put_voice_mixer),
+	/*[FEATURE]-Add-END   by kun.guan, 526254, 2015/10/28, add for new voice session*/
 };
 
 static const struct snd_kcontrol_new afe_pcm_rx_voice_mixer_controls[] = {
@@ -3866,6 +3885,22 @@ static const struct snd_kcontrol_new quat_mi2s_rx_port_mixer_controls[] = {
 	MSM_BACKEND_DAI_INT_FM_TX, 1, 0, msm_routing_get_port_mixer,
 	msm_routing_put_port_mixer),
 };
+
+//#Begin for FM, add radio path, by Kun.Guan & Xing.Wang, 2015-08-26
+#ifdef CONFIG_SND_TCT_IDOL4_FM
+static const struct snd_kcontrol_new quin_mi2s_rx_port_mixer_controls[] = {
+	SOC_SINGLE_EXT("PRI_MI2S_TX", MSM_BACKEND_DAI_QUINARY_MI2S_RX,
+	MSM_BACKEND_DAI_PRI_MI2S_TX, 1, 0, msm_routing_get_port_mixer,
+	msm_routing_put_port_mixer),
+	SOC_SINGLE_EXT("TERT_MI2S_TX", MSM_BACKEND_DAI_QUINARY_MI2S_RX,
+	MSM_BACKEND_DAI_TERTIARY_MI2S_TX, 1, 0, msm_routing_get_port_mixer,
+	msm_routing_put_port_mixer),
+	SOC_SINGLE_EXT("INTERNAL_FM_TX", MSM_BACKEND_DAI_QUINARY_MI2S_RX,
+	MSM_BACKEND_DAI_INT_FM_TX, 1, 0, msm_routing_get_port_mixer,
+	msm_routing_put_port_mixer),
+};
+#endif
+//End for FM, add radio path, by Kun.Guan & Xing.Wang, 2015-08-26
 
 static const struct snd_kcontrol_new slim_fm_switch_mixer_controls =
 	SOC_SINGLE_EXT("Switch", SND_SOC_NOPM,
@@ -4806,6 +4841,13 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 		"Quaternary MI2S_RX Hostless Playback",
 		0, 0, 0, 0),
 
+//Begin for FM, add radio path, by Kun.Guan & Xing.Wang, 2015-08-26
+#ifdef CONFIG_SND_TCT_IDOL4_FM
+	SND_SOC_DAPM_AIF_IN("QUIN_MI2S_DL_HL",
+		"Quinary MI2S_RX Hostless Playback",
+		0, 0, 0, 0),
+#endif
+//End for FM, add radio path, by Kun.Guan & Xing.Wang, 2015-08-26
 	SND_SOC_DAPM_AIF_IN("AUXPCM_DL_HL", "AUXPCM_HOSTLESS Playback",
 		0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("AUXPCM_UL_HL", "AUXPCM_HOSTLESS Capture",
@@ -5163,6 +5205,14 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 	SND_SOC_DAPM_MIXER("QUAT_MI2S_RX Port Mixer", SND_SOC_NOPM, 0, 0,
 	quat_mi2s_rx_port_mixer_controls,
 	ARRAY_SIZE(quat_mi2s_rx_port_mixer_controls)),
+
+//Begin for FM, add radio path, by Kun.Guan & Xing.Wang, 2015-08-26
+#ifdef CONFIG_SND_TCT_IDOL4_FM
+	SND_SOC_DAPM_MIXER("QUIN_MI2S_RX Port Mixer", SND_SOC_NOPM, 0, 0,
+	quin_mi2s_rx_port_mixer_controls,
+	ARRAY_SIZE(quin_mi2s_rx_port_mixer_controls)),
+#endif
+//End for FM, add radio path, by Kun.Guan & Xing.Wang, 2015-08-26
 	SND_SOC_DAPM_MIXER("QCHAT_Tx Mixer",
 	SND_SOC_NOPM, 0, 0, tx_qchat_mixer_controls,
 	ARRAY_SIZE(tx_qchat_mixer_controls)),
@@ -5764,6 +5814,10 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"QUIN_MI2S_RX_Voice Mixer", "Voice Stub", "VOICE_STUB_DL"},
 	{"QUIN_MI2S_RX_Voice Mixer", "Voice2 Stub", "VOICE2_STUB_DL"},
 	{"QUIN_MI2S_RX_Voice Mixer", "QCHAT", "QCHAT_DL"},
+	/*[FEATURE]-Add-BEGIN by kun.guan, 526254, 2015/10/28, add for new voice session*/
+	{"QUIN_MI2S_RX_Voice Mixer", "VoiceMMode1", "VOICEMMODE1_DL"},
+	{"QUIN_MI2S_RX_Voice Mixer", "VoiceMMode2", "VOICEMMODE2_DL"},
+	/*[FEATURE]-Add-END   by kun.guan, 526254, 2015/10/28, add for new voice session*/
 	{"QUIN_MI2S_RX", NULL, "QUIN_MI2S_RX_Voice Mixer"},
 
 	{"VOC_EXT_EC MUX", "PRI_MI2S_TX" , "PRI_MI2S_TX"},
@@ -6015,6 +6069,13 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"PRI_MI2S_RX", NULL, "PRI_MI2S_DL_HL"},
 	{"QUAT_MI2S_UL_HL", NULL, "QUAT_MI2S_TX"},
 
+//Begin for FM, add radio path, by Kun.Guan & Xing.Wang, 2015-08-26
+#ifdef CONFIG_SND_TCT_IDOL4_FM
+	{"QUIN_MI2S_RX", NULL, "QUIN_MI2S_DL_HL"},
+#endif
+//End for FM, add radio path, by Kun.Guan & Xing.Wang, 2015-08-26
+
+
 	{"SLIMBUS_0_RX Port Mixer", "INTERNAL_FM_TX", "INT_FM_TX"},
 	{"SLIMBUS_0_RX Port Mixer", "SLIM_0_TX", "SLIMBUS_0_TX"},
 	{"SLIMBUS_0_RX Port Mixer", "SLIM_1_TX", "SLIMBUS_1_TX"},
@@ -6128,8 +6189,20 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"PRI_MI2S_RX", NULL, "PRI_MI2S_RX Port Mixer"},
 
 	{"QUAT_MI2S_RX Port Mixer", "PRI_MI2S_TX", "PRI_MI2S_TX"},
+//Begin for FTM, mic to speaker path, by Kun.Guan & Xing.Wang, 2015-08-26
+	{"QUAT_MI2S_RX Port Mixer", "TERT_MI2S_TX", "TERT_MI2S_TX"},
+//End for FTM, mic to speaker path, by Kun.Guan & Xing.Wang, 2015-08-26
 	{"QUAT_MI2S_RX Port Mixer", "INTERNAL_FM_TX", "INT_FM_TX"},
 	{"QUAT_MI2S_RX", NULL, "QUAT_MI2S_RX Port Mixer"},
+
+//Begin for FM, add radio path, by Kun.Guan & Xing.Wang, 2015-08-26
+#ifdef CONFIG_SND_TCT_IDOL4_FM
+	{"QUIN_MI2S_RX Port Mixer", "PRI_MI2S_TX", "PRI_MI2S_TX"},
+	{"QUIN_MI2S_RX Port Mixer", "TERT_MI2S_TX", "TERT_MI2S_TX"},
+	{"QUIN_MI2S_RX Port Mixer", "INTERNAL_FM_TX", "INT_FM_TX"},
+	{"QUIN_MI2S_RX", NULL, "QUIN_MI2S_RX Port Mixer"},
+#endif
+//End for FM, add radio path, by Kun.Guan & Xing.Wang, 2015-08-26
 
 	/* Backend Enablement */
 

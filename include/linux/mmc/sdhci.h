@@ -253,7 +253,11 @@ struct sdhci_host {
 	struct mmc_command *cmd;	/* Current command */
 	struct mmc_data *data;	/* Current data request */
 	unsigned int data_early:1;	/* Data finished before cmd */
-
+/*MODIFIED-BEGIN by guotao.guo, 2016-04-15,BUG-1952033*/
+//add by gtguo for defect 1871748 with qc patch begin
+        unsigned int busy_handle:1;	/* Handling the order of Busy-end */
+//end
+/*MODIFIED-END by guotao.guo,BUG-1952033*/
 	struct sg_mapping_iter sg_miter;	/* SG state for PIO */
 	unsigned int blocks;	/* remaining PIO blocks */
 

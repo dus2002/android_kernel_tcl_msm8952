@@ -350,12 +350,17 @@ static void gpio_keys_gpio_work_func(struct work_struct *work)
 	if (bdata->button->wakeup)
 		pm_relax(bdata->input->dev.parent);
 }
-
+extern bool is_input_dev_resume(void);/*TCT-NB Tianhongwei modify for defect.1749099*/
 static void gpio_keys_gpio_timer(unsigned long _data)
 {
 	struct gpio_button_data *bdata = (struct gpio_button_data *)_data;
-
-	schedule_work(&bdata->work);
+/*TCT-NB Tianhongwei modify for defect.1749099*/
+	if(is_input_dev_resume())
+		schedule_work(&bdata->work);
+	else
+		mod_timer(&bdata->timer,
+			jiffies + msecs_to_jiffies(10));
+/*TCT-NB Tianhongwei modify end*/
 }
 
 static irqreturn_t gpio_keys_gpio_isr(int irq, void *dev_id)
@@ -921,6 +926,7 @@ static int gpio_keys_resume(struct device *dev)
 			if (bdata->button->wakeup)
 				disable_irq_wake(bdata->irq);
 		}
+		return 0;/*TCT-NB Tianhongwei modify for defect.1749099*/
 	} else {
 		mutex_lock(&input->mutex);
 		if (input->users)

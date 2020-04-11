@@ -594,6 +594,8 @@ static ssize_t mdss_fb_get_panel_info(struct device *dev,
 	return ret;
 }
 
+/* [BUGFIX]-Mod-BEGIN by TCTNB.CY, PR-1527074, 2016/01/29, remove debug node for cts test failed*/
+#if !defined(CONFIG_TCT_8X76_IDOL4S)
 static ssize_t mdss_fb_get_panel_status(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -628,7 +630,8 @@ static ssize_t mdss_fb_force_panel_dead(struct device *dev,
 
 	return len;
 }
-
+#endif
+/* [BUGFIX]-Mod-END by TCTNB.CY, 2016/01/29*/
 /*
  * mdss_fb_blanking_mode_switch() - Function triggers dynamic mode switch
  * @mfd:	Framebuffer data structure for display
@@ -787,8 +790,11 @@ static DEVICE_ATTR(msm_fb_src_split_info, S_IRUGO, mdss_fb_get_src_split_info,
 	NULL);
 static DEVICE_ATTR(msm_fb_thermal_level, S_IRUGO | S_IWUSR,
 	mdss_fb_get_thermal_level, mdss_fb_set_thermal_level);
+/* [BUGFIX]-Mod-BEGIN by TCTNB.CY, PR-1527074, 2016/01/29, remove debug node for cts test failed*/
+#if !defined(CONFIG_TCT_8X76_IDOL4S)
 static DEVICE_ATTR(msm_fb_panel_status, S_IRUGO | S_IWUSR,
 	mdss_fb_get_panel_status, mdss_fb_force_panel_dead);
+#endif
 static DEVICE_ATTR(msm_fb_dfps_mode, S_IRUGO | S_IWUSR,
 	mdss_fb_get_dfps_mode, mdss_fb_change_dfps_mode);
 static struct attribute *mdss_fb_attrs[] = {
@@ -800,10 +806,13 @@ static struct attribute *mdss_fb_attrs[] = {
 	&dev_attr_msm_fb_panel_info.attr,
 	&dev_attr_msm_fb_src_split_info.attr,
 	&dev_attr_msm_fb_thermal_level.attr,
+#if !defined(CONFIG_TCT_8X76_IDOL4S)
 	&dev_attr_msm_fb_panel_status.attr,
+#endif
 	&dev_attr_msm_fb_dfps_mode.attr,
 	NULL,
 };
+/* [BUGFIX]-Mod-END by TCTNB.CY, 2016/01/29*/
 
 static struct attribute_group mdss_fb_attr_group = {
 	.attrs = mdss_fb_attrs,
@@ -851,6 +860,8 @@ static int mdss_fb_probe(struct platform_device *pdev)
 
 	if (fbi_list_index >= MAX_FBI_LIST)
 		return -ENOMEM;
+
+
 
 	pdata = dev_get_platdata(&pdev->dev);
 	if (!pdata)

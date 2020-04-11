@@ -51,7 +51,10 @@
 #define	FLASH_LED_UNLOCK_SECURE(base)				(base + 0xD0)
 #define FLASH_PERPH_RESET_CTRL(base)				(base + 0xDA)
 #define	FLASH_TORCH(base)					(base + 0xE4)
-
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+#define FLASH_TRIM1(base)					(base + 0xF1)
+#define FLASH_TRIM3(base)					(base + 0xF3)
+#endif
 #define FLASH_STATUS_REG_MASK					0xFF
 #define FLASH_LED_FAULT_STATUS(base)				(base + 0x08)
 #define INT_LATCHED_STS(base)					(base + 0x18)
@@ -113,7 +116,10 @@
 #define	FLASH_LED_MODULE_CTRL_DEFAULT				0x60
 #define	FLASH_LED_CURRENT_READING_DELAY_MIN			5000
 #define	FLASH_LED_CURRENT_READING_DELAY_MAX			5001
-
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+#define FLASH_LED_MAX_LIMITING_CURRENT_1500_MA			1250
+#define FLASH_LED_MAX_LIMITING_CURRENT_2000_MA			1666
+#endif
 #define FLASH_UNLOCK_SECURE					0xA5
 #define FLASH_LED_TORCH_ENABLE					0x00
 #define FLASH_LED_TORCH_DISABLE					0x03
@@ -204,6 +210,10 @@ struct flash_led_platform_data {
 	u8				vph_pwr_droop_debounce_time;
 	u8				startup_dly;
 	u8				thermal_derate_rate;
+	#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	u8				flash_trim1;
+	u8				flash_trim3;
+	#endif
 	bool				pmic_charger_support;
 	bool				self_check_en;
 	bool				thermal_derate_en;
@@ -215,6 +225,9 @@ struct flash_led_platform_data {
 	bool				mask3_en;
 	bool				follow_rb_disable;
 	bool				die_current_derate_en;
+	#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	bool				max_current_1500_en;
+	#endif
 };
 
 struct qpnp_flash_led_buffer {
@@ -1418,7 +1431,9 @@ static void qpnp_flash_led_work(struct work_struct *work)
 			max_curr_avail_ma += flash_node->max_current;
 		if (flash_node->trigger & FLASH_LED1_TRIGGER)
 			max_curr_avail_ma += flash_node->max_current;
-
+		#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+		max_curr_avail_ma = (max_curr_avail_ma * 1200) / 1000;
+		#endif
 		psy_prop.intval = true;
 		if (led->battery_psy) {
 			rc = led->battery_psy->set_property(led->battery_psy,
@@ -1474,10 +1489,37 @@ static void qpnp_flash_led_work(struct work_struct *work)
 
 			if (max_curr_avail_ma < total_curr_ma) {
 				flash_node->prgm_current *=
-					max_curr_avail_ma / total_curr_ma;
+					(max_curr_avail_ma ) / total_curr_ma; 
 				flash_node->prgm_current2 *=
-					max_curr_avail_ma / total_curr_ma;
+					(max_curr_avail_ma) / total_curr_ma;
 			}
+			#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+			if (led->pdata->flash_trim1 == 0) {
+				rc = spmi_ext_register_readl(led->spmi_dev->ctrl,
+							led->spmi_dev->sid,
+							FLASH_TRIM1(led->base),
+							&val, 1);
+				led->pdata->flash_trim1 = val;
+			}
+
+			rc = qpnp_led_masked_write(led->spmi_dev,
+					FLASH_LED_UNLOCK_SECURE(led->base),
+					FLASH_SECURE_MASK, FLASH_UNLOCK_SECURE);
+			if (rc) {
+				dev_err(&led->spmi_dev->dev,
+						"Secure reg write failed\n");
+				goto exit_flash_led_work;
+			}
+			rc = qpnp_led_masked_write(led->spmi_dev,
+					FLASH_TRIM1(led->base),
+					0xFF, (led->pdata->flash_trim1 + 10));
+			if (rc) {
+				dev_err(&led->spmi_dev->dev,
+						"TRIM1 reg write failed\n");
+				goto exit_flash_led_work;
+			}
+			#endif
+
 
 			val = (u8)(flash_node->prgm_current *
 				FLASH_MAX_LEVEL / flash_node->max_current);
@@ -1488,7 +1530,32 @@ static void qpnp_flash_led_work(struct work_struct *work)
 					"Current register write failed\n");
 				goto exit_flash_led_work;
 			}
+			#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+			if (led->pdata->flash_trim3 == 0) {
+				rc = spmi_ext_register_readl(led->spmi_dev->ctrl,
+							led->spmi_dev->sid,
+							FLASH_TRIM3(led->base),
+							&val, 1);
+				led->pdata->flash_trim3 = val;
+			}
 
+			rc = qpnp_led_masked_write(led->spmi_dev,
+						FLASH_LED_UNLOCK_SECURE(led->base),
+						FLASH_SECURE_MASK, FLASH_UNLOCK_SECURE);
+			if (rc) {
+				dev_err(&led->spmi_dev->dev,
+						"Secure reg write failed\n");
+				goto exit_flash_led_work;
+			}
+			rc = qpnp_led_masked_write(led->spmi_dev,
+						FLASH_TRIM3(led->base),
+						0xFF, (led->pdata->flash_trim3 + 10));
+			if (rc) {
+				dev_err(&led->spmi_dev->dev,
+						"TRIM3 reg write failed\n");
+				goto exit_flash_led_work;
+			}
+			#endif
 			val = (u8)(flash_node->prgm_current2 *
 				FLASH_MAX_LEVEL / flash_node->max_current);
 			rc = qpnp_led_masked_write(led->spmi_dev,
@@ -1722,6 +1789,9 @@ static void qpnp_flash_led_brightness_set(struct led_classdev *led_cdev,
 {
 	struct flash_node_data *flash_node;
 	struct qpnp_flash_led *led;
+	#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	int max_flash_node_current;
+	#endif
 	flash_node = container_of(led_cdev, struct flash_node_data, cdev);
 	led = dev_get_drvdata(&flash_node->spmi_dev->dev);
 
@@ -1771,7 +1841,32 @@ static void qpnp_flash_led_brightness_set(struct led_classdev *led_cdev,
 			if (!value) {
 				flash_node->prgm_current = 0;
 				flash_node->prgm_current2 = 0;
-			}
+				}
+			#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+			else
+				{
+				/*TCT-NB Tianhongwei modify for flash led current*/
+				if (led->flash_node[0].flash_on ||led->flash_node[1].flash_on) 
+				{
+					u16 flash_prgm_current;
+
+					flash_node->prgm_current = led->flash_node[0].prgm_current;
+					flash_node->prgm_current2 =  led->flash_node[1].prgm_current;
+
+					flash_prgm_current =
+					led->flash_node[0].prgm_current + led->flash_node[1].prgm_current;
+					max_flash_node_current = (led->pdata->max_current_1500_en) ? FLASH_LED_MAX_LIMITING_CURRENT_1500_MA : FLASH_LED_MAX_LIMITING_CURRENT_2000_MA;					
+					if (flash_prgm_current> max_flash_node_current) 
+					{
+						led->flash_node[0].prgm_current =(led->flash_node[0].prgm_current * max_flash_node_current) / flash_prgm_current;
+						led->flash_node[1].prgm_current =(led->flash_node[1].prgm_current * max_flash_node_current) / flash_prgm_current;
+						flash_node->prgm_current = (led->flash_node[0].prgm_current * 1200) / 1000;
+						flash_node->prgm_current2 = (led->flash_node[1].prgm_current * 1200) / 1000;
+					}
+				}
+				/*TCT-NB Tianhongwei end*/
+				}
+			#endif
 		}
 	} else {
 		if (value < FLASH_LED_MIN_CURRENT_MA && value != 0)
@@ -2120,7 +2215,10 @@ static int qpnp_flash_led_parse_common_dt(
 					"Unable to read clamp current\n");
 		return rc;
 	}
-
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	led->pdata->flash_trim1 = 0;
+	led->pdata->flash_trim3  = 0;
+#endif
 	led->pdata->pmic_charger_support =
 			of_property_read_bool(node,
 						"qcom,pmic-charger-support");
@@ -2131,7 +2229,11 @@ static int qpnp_flash_led_parse_common_dt(
 	led->pdata->thermal_derate_en =
 			of_property_read_bool(node,
 						"qcom,thermal-derate-enabled");
-
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	led->pdata->max_current_1500_en =
+			of_property_read_bool(node,
+						"qcom,max_current_1500");
+#endif
 	if (led->pdata->thermal_derate_en) {
 		led->pdata->thermal_derate_rate =
 				FLASH_LED_THERMAL_DERATE_RATE_DEFAULT_PERCENT;

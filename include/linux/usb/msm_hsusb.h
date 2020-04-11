@@ -105,7 +105,11 @@ enum msm_usb_phy_type {
 	QUSB_ULPI_PHY,
 };
 
+#if defined(CONFIG_TCT_8X76_IDOL4) || defined(CONFIG_TCT_8X76_IDOL455)
+#define IDEV_CHG_MAX	2000
+#else
 #define IDEV_CHG_MAX	1500
+#endif
 #define IDEV_CHG_MIN	500
 #define IUNIT		100
 

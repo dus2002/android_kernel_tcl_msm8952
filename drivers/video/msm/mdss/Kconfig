@@ -62,3 +62,8 @@ config FB_MSM_MDSS_XLOG_DEBUG
 	features to: Dump MDSS registers during driver errors, panic
 	driver during fatal errors and enable some display-driver logging
 	into an internal buffer (this avoids logging overhead).
+
+#[FEATURE]-Add-BEGIN by TCTNB.CY, task-1395489, 2016/01/11, enable error flag detect
+config ERR_FLAG_DETECT
+	bool "Enable error flag detect"
+#[FEATURE]-Mod-END by TCTNB.CY, 2016/01/11

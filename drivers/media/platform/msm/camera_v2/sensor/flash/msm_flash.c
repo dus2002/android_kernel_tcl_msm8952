@@ -106,7 +106,9 @@ static struct led_classdev msm_torch_led[MAX_LED_TRIGGERS] = {
 static int32_t msm_torch_create_classdev(struct platform_device *pdev,
 				void *data)
 {
+#if !defined(CONFIG_TCT_8X76_IDOL4S) && !defined(CONFIG_TCT_8X76_IDOL4S_VDF)/*TCT-NB  not in mmitest ,can remove*/
 	int32_t rc = 0;
+#endif
 	int32_t i = 0;
 	struct msm_flash_ctrl_t *fctrl =
 		(struct msm_flash_ctrl_t *)data;
@@ -123,7 +125,7 @@ static int32_t msm_torch_create_classdev(struct platform_device *pdev,
 				__func__, __LINE__, i);
 			msm_torch_brightness_set(&msm_torch_led[i],
 				LED_OFF);
-
+#if !defined(CONFIG_TCT_8X76_IDOL4S) && !defined(CONFIG_TCT_8X76_IDOL4S_VDF)/*TCT-NB  not in mmitest ,can remove*/
 			rc = led_classdev_register(&pdev->dev,
 				&msm_torch_led[i]);
 			if (rc) {
@@ -131,6 +133,7 @@ static int32_t msm_torch_create_classdev(struct platform_device *pdev,
 						i, rc);
 				return rc;
 			}
+#endif
 		} else {
 			pr_err("Invalid fctrl->torch_trigger[%d]\n", i);
 			return -EINVAL;

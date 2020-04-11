@@ -57,6 +57,11 @@
 #define WCD_MBHC_SPL_HS_CNT  1
 
 static int det_extn_cable_en;
+
+/*[983752]-Add-Begin by TCTSH@YK, 2015/12/04, To compatible with Iphone headset*/
+extern int  micbias2_en;
+/*[983752]-Add-End by TCTSH@YK, 2015/12/04, To compatible with Iphone headset*/
+
 module_param(det_extn_cable_en, int,
 		S_IRUGO | S_IWUSR | S_IWGRP);
 MODULE_PARM_DESC(det_extn_cable_en, "enable/disable extn cable detect");
@@ -149,7 +154,9 @@ static void wcd_program_btn_threshold(const struct wcd_mbhc *mbhc, bool micbias)
 static void wcd_enable_curr_micbias(const struct wcd_mbhc *mbhc,
 				const enum wcd_mbhc_cs_mb_en_flag cs_mb_en)
 {
-
+	/*[983752]-Add-Begin by TCTSH@YK, 2015/12/04, To be compatible with Iphone headset*/
+	struct snd_soc_codec *codec = mbhc->codec;
+	/*[983752]-Add-End by TCTSH@YK, 2015/12/04, To be compatible with Iphone headset*/
 	/*
 	 * Some codecs handle micbias/pullup enablement in codec
 	 * drivers itself and micbias is not needed for regular
@@ -167,6 +174,13 @@ static void wcd_enable_curr_micbias(const struct wcd_mbhc *mbhc,
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 3);
 		/* Program Button threshold registers as per CS */
 		wcd_program_btn_threshold(mbhc, false);
+		 /*[983752]-Add-Begin by TCTSH@YK, 2015/12/04, To be compatible with Iphone headset*/
+		 /*enable micbias for U recording using iphone headset in CS mode */
+		if(micbias2_en)
+			mbhc->mbhc_cb->mbhc_micb2_2v7_ctrl(codec,true);
+			/*For wait for voltage to 2v15 */
+			msleep(50);
+		/*[983752]-Add-End by TCTSH@YK, 2015/12/04, To be compatible with Iphone headset*/
 		break;
 	case WCD_MBHC_EN_MB:
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
@@ -176,6 +190,12 @@ static void wcd_enable_curr_micbias(const struct wcd_mbhc *mbhc,
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_MICB_CTRL, 2);
 		/* Program Button threshold registers as per MICBIAS */
 		wcd_program_btn_threshold(mbhc, true);
+        /*[983752]-Add-Begin by TCTSH@YK, 2015/12/04, To be compatible with Iphone headset*/
+	    /*in here to enable micbias to detect iphone headset,voltage to 2v15,can see 80-NK808-2X@page 1025*/
+		mbhc->mbhc_cb->mbhc_micb2_2v7_ctrl(codec,true);
+		/*For wait for voltage to 2v15 */
+		msleep(50);
+        /*[983752]-Add-End by TCTSH@YK, 2015/12/04, To be compatible with Iphone headset*/
 		break;
 	case WCD_MBHC_EN_PULLUP:
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 3);
@@ -580,7 +600,13 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 				mbhc->mbhc_cb->mbhc_micb_ctrl_thr_mic(
 						mbhc->codec,
 						MIC_BIAS_2, false);
-			mbhc->micbias_enable = false;
+                                        mbhc->micbias_enable = false;
+		}else{
+			/*[983752]-Add-Begin by TCTSH@YK, 2015/12/04, To compatible with Iphone headset*/
+			if(mbhc->mbhc_cb->mbhc_micb2_2v7_ctrl)
+				mbhc->mbhc_cb->mbhc_micb2_2v7_ctrl(
+						mbhc->codec,false);
+		    /*[983752]-Add-End by TCTSH@YK, 2015/12/04, To compatible with Iphone headset*/
 		}
 
 		mbhc->hph_type = WCD_MBHC_HPH_NONE;
@@ -865,6 +891,13 @@ static int wcd_check_cross_conn(struct wcd_mbhc *mbhc)
 	enum wcd_mbhc_plug_type plug_type = MBHC_PLUG_TYPE_NONE;
 	s16 reg1;
 	bool hphl_sch_res, hphr_sch_res;
+	/*[BUGFIX]-Add-BEGIN by TCTNB.bin.su,12/03/2015,Task850685,macro optimization.*/
+	/*[FEATURE]-Add-BEGIN by TCTSH.Cedar, 526254, 2015/10/23, fix slow detection for headphone*/
+	#if defined(CONFIG_TCT_8X76_COMMON)
+	return false;
+	#endif
+	/*[FEATURE]-Add-END   by TCTSH.Cedar, 526254, 2015/10/23, fix slow detection for headphone*/
+	/*[BUGFIX]-Add-END by TCTNB.bin.su,12/03/2015,Task850685,macro optimization.*/
 
 	if (wcd_swch_level_remove(mbhc)) {
 		pr_debug("%s: Switch level is low\n", __func__);
@@ -1148,6 +1181,7 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 
 
 	/* Enable HW FSM */
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 0);/*TCT-NB Tianhongwei add for headphone detect*/
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 1);
 	/*
 	 * Check for any button press interrupts before starting 3-sec
@@ -1163,8 +1197,12 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 		pr_debug("%s No btn press interrupt\n", __func__);
 		if (!btn_result && !hs_comp_res)
 			plug_type = MBHC_PLUG_TYPE_HEADSET;
-		else if (!btn_result && hs_comp_res)
+		else if (!btn_result && hs_comp_res){
 			plug_type = MBHC_PLUG_TYPE_HIGH_HPH;
+			/*Begin_add TCTSH@YK , Defect:1119400 ,2016/01/05, Not support wired selfie stick capture*/
+			mbhc->frist_type=MBHC_PLUG_TYPE_HIGH_HPH;
+			/*End_add TCTSH@YK ,Defect:1119400,2016/01/05, Not support wired selfie stick capture*/
+		    }
 		else
 			plug_type = MBHC_PLUG_TYPE_INVALID;
 	} else {
@@ -1261,6 +1299,14 @@ correct_plug_type:
 
 		if ((!hs_comp_res) && (!is_pa_on)) {
 			/* Check for cross connection*/
+/*[BUGFIX]-Add-BEGIN by TCTNB.bin.su,12/03/2015,Task850685,macro optimization.*/
+//Begin for MBHC, more identification precision, by Kun.Guan & Xing.Wang, 2015-08-26
+#if defined(CONFIG_TCT_8X76_COMMON)
+			pt_gnd_mic_swap_cnt = 0;
+			no_gnd_mic_swap_cnt = 0;
+			ret = 0;
+			plug_type = MBHC_PLUG_TYPE_HEADSET;
+#else
 			ret = wcd_check_cross_conn(mbhc);
 			if (ret < 0) {
 				continue;
@@ -1308,14 +1354,26 @@ correct_plug_type:
 					continue;
 				}
 			}
+#endif
+//End for MBHC, more identification precision, by Kun.Guan & Xing.Wang, 2015-08-26
+/*[BUGFIX]-Add-END by TCTNB.bin.su,12/03/2015,Task850685,macro optimization.*/
 		}
 
 		WCD_MBHC_REG_READ(WCD_MBHC_HPHL_SCHMT_RESULT, hphl_sch);
 		WCD_MBHC_REG_READ(WCD_MBHC_MIC_SCHMT_RESULT, mic_sch);
 		if (hs_comp_res && !(hphl_sch || mic_sch)) {
+/*[BUGFIX]-Add-BEGIN by TCTNB.bin.su,12/03/2015,Task850685,macro optimization.*/
+//Begin for MBHC, more identification precision, by Kun.Guan & Xing.Wang, 2015-08-26
+#if defined(CONFIG_TCT_8X76_COMMON)
+			plug_type = MBHC_PLUG_TYPE_HEADSET;
+			wrk_complete = false;
+#else
 			pr_debug("%s: cable is extension cable\n", __func__);
 			plug_type = MBHC_PLUG_TYPE_HIGH_HPH;
 			wrk_complete = true;
+#endif
+//End for MBHC, more identification precision, by Kun.Guan & Xing.Wang, 2015-08-26
+/*[BUGFIX]-Add-END by TCTNB.bin.su,12/03/2015,Task850685,macro optimization.*/
 		} else {
 			pr_debug("%s: cable might be headset: %d\n", __func__,
 					plug_type);
@@ -1589,7 +1647,10 @@ static int wcd_mbhc_get_button_mask(struct wcd_mbhc *mbhc)
 	int btn;
 
 	btn = mbhc->mbhc_cb->map_btn_code_to_num(mbhc->codec);
-
+/*TCT-NB Tianhongwei not report undefined key*/
+	if(mbhc->mbhc_cfg->key_code[btn] == 0)
+		return 0;
+/*TCT-NB Tianhongwei end*/
 	switch (btn) {
 	case 0:
 		mask = SND_JACK_BTN_0;
@@ -1895,7 +1956,13 @@ static irqreturn_t wcd_mbhc_btn_press_handler(int irq, void *data)
 			 __func__);
 		goto done;
 	}
-	if (mbhc->current_plug != MBHC_PLUG_TYPE_HEADSET) {
+	/*Begin_add TCTSH@YK , Defect:1119400 ,2016/01/05, Not support wired selfie stick capture*/
+	if ((mbhc->current_plug != MBHC_PLUG_TYPE_HEADSET)&&(mbhc->frist_type==MBHC_PLUG_TYPE_HIGH_HPH)){
+	pr_debug("%s: Plug isn't headset, It is HIGH_HPH TYPE ,it is selfie stick ,maybe\n",
+				__func__);
+	}
+	/*End_add TCTSH@YK ,Defect:1119400,2016/01/05, Not support wired selfie stick capture*/
+	else if (mbhc->current_plug != MBHC_PLUG_TYPE_HEADSET) {
 		pr_debug("%s: Plug isn't headset, ignore button press\n",
 				__func__);
 		goto done;
@@ -2338,6 +2405,9 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 	mbhc->is_extn_cable = false;
 	mbhc->hph_type = WCD_MBHC_HPH_NONE;
 	mbhc->wcd_mbhc_regs = wcd_mbhc_regs;
+	/*Begin_add TCTSH@YK , Defect:1119400 ,2016/01/05, Not support wired selfie stick capture*/
+	mbhc->frist_type=MBHC_PLUG_TYPE_INVALID;
+	/*End_add TCTSH@YK ,Defect:1119400,2016/01/05, Not support wired selfie stick capture*/
 
 	if (mbhc->intr_ids == NULL) {
 		pr_err("%s: Interrupt mapping not provided\n", __func__);

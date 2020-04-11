@@ -673,6 +673,48 @@ config SYSVIPC_COMPAT
 	def_bool y
 	depends on COMPAT && SYSVIPC
 
+config TCT_8X76_COMMON
+	depends on ARCH_MSM8916
+	bool "MSM8976 TCT COMMON"
+	help
+	  Support for the TCT COMMON device.
+
+config TCT_8X76_IDOL4S
+	depends on ARCH_MSM8916
+	bool "MSM8976 IDOL4S"
+	help
+	  Support for the TCT IDOL4S device.
+
+config TCT_8X76_IDOL4C
+	depends on ARCH_MSM8916
+	bool "MSM8976 IDOL4C"
+	help
+	  Support for the TCT IDOL4C device.
+
+config TCT_8X76_IDOL4
+	depends on ARCH_MSM8916
+	bool "MSM8976 IDOL4"
+	help
+	  Support for the TCT IDOL4 device.
+
+config TCT_8X76_IDOL452_CRICKET
+	depends on ARCH_MSM8916
+	bool "MSM8976 IDOL452_CRICKET"
+	help
+	  Support for the TCT IDOL452_CRICKET device.
+
+config TCT_8X76_IDOL4S_VDF
+	depends on ARCH_MSM8916
+	bool "MSM8976 IDOL4S_VDF"
+	help
+	  Support for the TCT IDOL4S_VDF device.
+
+config TCT_8X76_POP457
+	depends on ARCH_MSM8916
+	bool "MSM8976 POP457"
+	help
+	  Support for the TCT POP457 device.
+
 endmenu
 
 menu "Power management options"

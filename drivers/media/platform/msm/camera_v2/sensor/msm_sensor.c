@@ -17,11 +17,47 @@
 #include "msm_camera_i2c_mux.h"
 #include <linux/regulator/rpm-smd-regulator.h>
 #include <linux/regulator/consumer.h>
-
+/*xiaoming.hu@tcl.com ov8858 idol4 otp*/
+#define TCT_SENSOR_OTP_OPEN     1
+#if TCT_SENSOR_OTP_OPEN
+#include "ov8858_idol4_v4l2_tct_OTP.h"
+#include "ov4688_idol4s_v4l2_tct_OTP.h"
+#include "Qtech_s5k4h8_idol4s.h" //MODIFIED by XuNan, 2016-04-08,BUG-1924476
+#endif
+/*xiaoming.hu@tcl.com ov8858 idol4 otp*/
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
 
 static struct v4l2_file_operations msm_sensor_v4l2_subdev_fops;
+
+#if TCT_SENSOR_OTP_OPEN
+static int TCT_update_OTP(struct msm_sensor_ctrl_t *s_ctrl)
+{
+    mutex_lock(s_ctrl->msm_sensor_mutex);
+/*add ov8858_idol4 xiaoming.hu@tcl.com*/
+    printk("%s, OTP: sensor name: %s\n", __func__, s_ctrl->sensordata->sensor_name);
+    if ((!strcmp(s_ctrl->sensordata->sensor_name, "ov8858_idol455")) ||
+        (!strcmp(s_ctrl->sensordata->sensor_name, "ov8858_idol4s")) || (!strcmp(s_ctrl->sensordata->sensor_name, "ov8858_idol4"))) {
+        printk("OTP: %s update\n",s_ctrl->sensordata->sensor_name);
+        ov8858_idol4_update_otp_wb(s_ctrl->sensor_i2c_client);
+        ov8858_idol4_update_otp_lenc(s_ctrl->sensor_i2c_client);
+    } else if (!strcmp(s_ctrl->sensordata->sensor_name, "ov4688_idol4s")) {
+#ifdef CONFIG_OV4688
+        ov4688_idol4s_update_otp_wb(s_ctrl->sensor_i2c_client);
+#endif
+    /*MODIFIED-BEGIN by XuNan, 2016-04-08,BUG-1924476*/
+    } else if(!strcmp(s_ctrl->sensordata->sensor_name, "s5k4h8_idol4s")){
+	printk("s5k4h8_idol4s should I do calbiration by this way?!\n");
+        s5k4h8_idol4s_check_otp_info(s_ctrl->sensor_i2c_client);
+        /*MODIFIED-END by XuNan,BUG-1924476*/
+    } else {
+        printk("%s, %s unregister OTP info here!\n", __func__, s_ctrl->sensordata->sensor_name);
+    }
+    mutex_unlock(s_ctrl->msm_sensor_mutex);
+    return 0;
+}
+#endif
+
 static void msm_sensor_adjust_mclk(struct msm_camera_power_ctrl_t *ctrl)
 {
 	int idx;
@@ -532,6 +568,59 @@ static uint16_t msm_sensor_id_by_mask(struct msm_sensor_ctrl_t *s_ctrl,
 	return sensor_id;
 }
 
+//check lens_id from otp if OK
+#if TCT_SENSOR_OTP_OPEN
+#ifdef CONFIG_OV4688
+static int ov4688_otp_id_check(struct msm_sensor_ctrl_t *s_ctrl)
+{
+    int rc = 0;
+
+    const char *sensor_name;
+    static uint16_t ov4688_module_flag = 0x00;
+    uint16_t lens_id;
+    uint32_t module_magic;
+
+    sensor_name = s_ctrl->sensordata->sensor_name;
+    module_magic = ov4688_idol4s_get_module_id(s_ctrl->sensor_i2c_client, &lens_id);
+    if (0xFFFF == lens_id) {
+        pr_err("ov4688 OTP lens id NULL, consider it as default!\n");
+    } else if(!strcmp(sensor_name, "ov4688_idol4s")) {
+        if (OV4688_IDOL4S_MODULE_ID != lens_id) {
+            ov4688_module_flag |= 0x01;
+            if ((0x11 != (ov4688_module_flag & 0x11)) &&
+                (OV4688_MODULE_MAGIC_CODE == module_magic)) {
+                pr_err("%s lens_id 0x%x uncorrect check another!!\n", sensor_name, lens_id);
+                return -ENODEV;
+            } else {
+                pr_err("ov4688 OTP lens id uncorrect, consider it as default!\n");
+            }
+        } else {
+            ov4688_module_flag = 0x0;
+            pr_err("%s lens_id 0x%x match OK!!\n", sensor_name, lens_id);
+        }
+    } else if (!strcmp(sensor_name, "ov4688_idol4s_2nd")) {
+        if (OV4688_IDOL4S_2ND_MODULE_ID != lens_id) {
+            ov4688_module_flag |= 0x10;
+            if ((0x11 != (ov4688_module_flag & 0x11)) &&
+                (OV4688_MODULE_MAGIC_CODE == module_magic)) {
+                pr_err("%s lens_id 0x%x uncorrect check another!!\n", sensor_name, lens_id);
+                return -ENODEV;
+            } else {
+                pr_err("ov4688 OTP lens id uncorrect, consider it as default!\n");
+            }
+        } else {
+            ov4688_module_flag = 0x0;
+            pr_err("%s lens_id 0x%x match OK!!\n", sensor_name, lens_id);
+        }
+    } else{
+        pr_err("%s finally unknown module!\n", sensor_name);
+    }
+
+    return rc;
+}
+#endif
+#endif
+
 int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	int rc = 0;
@@ -566,11 +655,22 @@ int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 
 	CDBG("%s: read id: 0x%x expected id 0x%x:\n", __func__, chipid,
 		slave_info->sensor_id);
+
 	if (msm_sensor_id_by_mask(s_ctrl, chipid) != slave_info->sensor_id) {
 		pr_err("msm_sensor_match_id chip id doesnot match\n");
 		return -ENODEV;
 	}
-	return rc;
+
+#if TCT_SENSOR_OTP_OPEN
+#ifdef CONFIG_OV4688
+    //check lens_id from otp if OK
+    if (0x4688 == slave_info->sensor_id) {
+        rc = ov4688_otp_id_check(s_ctrl);
+    }
+#endif
+#endif
+
+    return rc;
 }
 
 static struct msm_sensor_ctrl_t *get_sctrl(struct v4l2_subdev *sd)
@@ -646,6 +746,14 @@ static long msm_sensor_subdev_ioctl(struct v4l2_subdev *sd,
 		return 0;
 	case MSM_SD_NOTIFY_FREEZE:
 		return 0;
+
+/*xiaoming.hu@tcl.com ov8858 idol455 otp*/
+    case VIDIOC_MSM_SENSOR_GET_OTP_STATUS:
+    #if TCT_SENSOR_OTP_OPEN
+		printk("%s cmd =%d \n",__func__,cmd);
+		TCT_update_OTP(s_ctrl);
+		return 0;
+	#endif
 	default:
 		return -ENOIOCTLCMD;
 	}

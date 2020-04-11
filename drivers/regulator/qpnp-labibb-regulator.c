@@ -85,6 +85,10 @@
 
 /* REG_LAB_IBB_EN_RDY */
 #define LAB_IBB_EN_RDY_EN		BIT(7)
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+#define LAB_IBB_EN_RDY_MASK		0x7F
+#define LAB_IBB_EN_RDY_SHIFT		7
+#endif
 
 /* REG_LAB_CURRENT_LIMIT */
 #define LAB_CURRENT_LIMIT_BITS		3
@@ -1277,6 +1281,7 @@ static int qpnp_labibb_regulator_enable(struct qpnp_labibb *labibb)
 {
 	int rc;
 	u8 val;
+
 	int dly;
 	int retries;
 	bool enabled = false;
@@ -1426,7 +1431,7 @@ static int qpnp_lab_regulator_enable(struct regulator_dev *rdev)
 
 	struct qpnp_labibb *labibb  = rdev_get_drvdata(rdev);
 
-	if (!labibb->lab_vreg.vreg_enabled && !labibb->swire_control) {
+    if (!labibb->lab_vreg.vreg_enabled && !labibb->swire_control) {
 
 		if (labibb->mode != QPNP_LABIBB_STANDALONE_MODE)
 			return qpnp_labibb_regulator_enable(labibb);
@@ -1467,8 +1472,7 @@ static int qpnp_lab_regulator_disable(struct regulator_dev *rdev)
 	u8 val;
 	struct qpnp_labibb *labibb  = rdev_get_drvdata(rdev);
 
-	if (labibb->lab_vreg.vreg_enabled && !labibb->swire_control) {
-
+    if (labibb->lab_vreg.vreg_enabled && !labibb->swire_control) {
 		if (labibb->mode != QPNP_LABIBB_STANDALONE_MODE)
 			return qpnp_labibb_regulator_disable(labibb);
 
@@ -1788,6 +1792,25 @@ static int register_qpnp_lab_regulator(struct qpnp_labibb *labibb,
 			return rc;
 		}
 	}
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, task-1424627 & 1924903, 2016/4/9, temp modify for configure lab register for display */
+#if defined(CONFIG_TCT_8X76_IDOL4S) || defined(CONFIG_TCT_8X76_IDOL4S_VDF)
+	val = 0xC1;
+	rc = qpnp_labibb_write(labibb, labibb->lab_base +
+                       0x52, &val, 1);
+	val = 0x02;
+	rc = qpnp_labibb_write(labibb, labibb->lab_base +
+                       0x4D, &val, 1);
+	val = 0x0E;
+	rc = qpnp_labibb_write(labibb, labibb->lab_base +
+                       0x4E, &val, 1);
+	val = 0x80;
+	rc = qpnp_labibb_write(labibb, labibb->lab_base +
+                       0x51, &val, 1);
+	val = 0x04;
+	rc = qpnp_labibb_write(labibb, labibb->lab_base +
+                       0x60, &val, 1);
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CY, 2016/4/9*/
 
 	if (init_data->constraints.name) {
 		rdesc			= &(labibb->lab_vreg.rdesc);

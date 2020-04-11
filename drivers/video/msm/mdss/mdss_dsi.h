@@ -409,6 +409,12 @@ struct mdss_dsi_ctrl_pdata {
 	bool dsi_irq_line;
 	bool dcs_cmd_insert;
 	atomic_t te_irq_ready;
+/* [FEATURE]-Add-BEGIN by TCTNB.CY, task-1395489, 2016/01/11, enable error flag detect*/
+#ifdef CONFIG_ERR_FLAG_DETECT
+	int err_flag_gpio;
+	atomic_t err_flag_ready;
+#endif
+/* [FEATURE]-Mod-END by TCTNB.CY, 2016/01/11*/
 
 	bool cmd_sync_wait_broadcast;
 	bool cmd_sync_wait_trigger;
@@ -527,6 +533,9 @@ int mdss_dsi_wait_for_lane_idle(struct mdss_dsi_ctrl_pdata *ctrl);
 
 irqreturn_t mdss_dsi_isr(int irq, void *ptr);
 irqreturn_t hw_vsync_handler(int irq, void *data);
+#ifdef CONFIG_ERR_FLAG_DETECT
+irqreturn_t panel_err_flag_handler(int irq, void *data);
+#endif
 void mdss_dsi_irq_handler_config(struct mdss_dsi_ctrl_pdata *ctrl_pdata);
 
 void mdss_dsi_set_tx_power_mode(int mode, struct mdss_panel_data *pdata);

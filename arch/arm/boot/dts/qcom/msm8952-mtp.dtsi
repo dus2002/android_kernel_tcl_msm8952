@@ -16,43 +16,135 @@
 #include "msm8952-camera-sensor-mtp.dtsi"
 
 &i2c_3 { /* BLSP1 QUP3 */
+//[BUGFIX]-Add-BEGIN by xingchen.wang for task:526254 2015/11/03
 	synaptics@20 {
-		compatible = "synaptics,dsx";
-		reg = <0x20>;
+			compatible = "synaptics,dsx-i2c";
+			reg = <0x20>;
+			interrupt-parent = <&msm_gpio>;
+			interrupts = <65 0x2008>;
+			vdd-supply = <&pm8950_l17>;
+//[BUGFIX]-Add-Begin by TCTSH xingchen.wang, task 1052817 ,2015/12/16
+//			vcc_i2c-supply = <&pm8950_l6>;
+			synaptics,pwr-reg-name = "vdd";
+//			synaptics,bus-reg-name = "vcc_i2c";
+//[BUGFIX]-Add-End by TCTSH xingchen.wang. 2015/12/16
+			synaptics,irq-gpio = <&msm_gpio 65 0x2008>;
+			synaptics,reset-gpio = <&msm_gpio 64 0x0>;
+			synaptics,irq-on-state = <0>;
+			synaptics,irq-flags = <0x2008>; /* IRQF_ONESHOT | IRQF_TRIGGER_LOW */
+/*ADD-BEGIN by rong.fu 2015/07/19*/
+			synaptics,reset-on-state = <0>;
+			synaptics,reset-active-ms = <20>;
+/*ADD-EDD by rong.fu 2015/07/19*/
+			synaptics,power-delay-ms = <200>;
+			synaptics,reset-delay-ms = <200>;
+//			synaptics,max-y-for-2d = <800>; /* remove if no virtual buttons */
+//			synaptics,vir-button-codes = <102 100 900 100 60 158 300 900 100 60>;
+	};
+//[BUGFIX]-Add-End by xingchen.wang 2015/11/03
+//ADD-BEGIN by xingchen.wang 2015/10/23 for idol455 TP FT5436.
+	focaltech@38 {
+		compatible = "focaltech,5436";
+		reg = <0x38>;
 		interrupt-parent = <&msm_gpio>;
 		interrupts = <65 0x2008>;
-		avdd-supply = <&pm8950_l17>;
-		vdd-supply = <&pm8950_l6>;
-		clock-names = "iface_clk", "core_clk";
-		clocks = <&clock_gcc clk_gcc_blsp1_ahb_clk>,
-			<&clock_gcc clk_gcc_blsp1_qup3_i2c_apps_clk>;
+//[BUGFIX]-Add-Begin by TCTSH xingchen.wang, task 1052817 ,2015/12/16
+		vdd-supply = <&pm8950_l17>;
+//		vcc_i2c-supply = <&pm8950_l6>;
+//[BUGFIX]-Add-End by TCTSH xingchen.wang. 2015/12/16
 		/* pins used by touchscreen */
 		pinctrl-names = "pmx_ts_active","pmx_ts_suspend","pmx_ts_release";
 		pinctrl-0 = <&ts_int_active &ts_reset_active>;
 		pinctrl-1 = <&ts_int_suspend &ts_reset_suspend>;
 		pinctrl-2 = <&ts_release>;
-		synaptics,irq-gpio = <&msm_gpio 65 0x2008>;
-		synaptics,reset-gpio = <&msm_gpio 64 0x0>;
-		synaptics,i2c-pull-up;
-		synaptics,power-down;
-		synaptics,disable-gpios;
-		synaptics,bypass-packrat-id-check;
-		synaptics,display-coords = <0 0 1079 1919>;
-		synaptics,panel-coords = <0 0 1079 2084>;
+		focaltech,name = "ft5436";
+		focaltech,family-id = <0x12>;
+		focaltech,reset-gpio = <&msm_gpio 64 0x0>;
+		focaltech,irq-gpio = <&msm_gpio 65 0x2008>;
+//[BUGFIX]-Add-Begin by TCTSH xingchen.wang, task 1030308 for idol4 TP add,2015/12/04
+		focaltech,display-coords = <0 0 1080 1920>;
+		focaltech,panel-coords = <0 0 1080 1920>;
+//[BUGFIX]-Add-End by TCTSH xingchen.wang. 2015/12/04
+		focaltech,button-map= <158 102 139>;
+		focaltech,no-force-update;
+		focaltech,i2c-pull-up;
+		focaltech,group-id = <1>;
+		focaltech,hard-reset-delay-ms = <20>;
+		focaltech,soft-reset-delay-ms = <150>;//TCTSH ZhaiQingbo optimize time from 200 to 150ms for defect 1707329 and task 1819042, 2013.3.15
+		focaltech,num-max-touches = <5>;
+		focaltech,fw-delay-aa-ms = <30>;
+		focaltech,fw-delay-55-ms = <30>;
+//[BUGFIX]-Add-Begin by TCTSH xingchen.wang, 1161598 for ft firmware upgrade,2015/12/14
+		focaltech,fw-upgrade-id1 = <0x54>;
+		focaltech,fw-upgrade-id2 = <0x2c>;
+//[BUGFIX]-Add-End by TCTSH xingchen.wang. 2015/12/14
+		focaltech,fw-delay-readid-ms = <10>;
+		focaltech,fw-delay-era-flsh-ms = <2000>;
+		//focaltech,fw-auto-cal;
+		focaltech,ignore-id-check;
 	};
+//ADD-END by xingchen.wang 2015/10/23.
 };
 
 &i2c_2 {
+        /*[FEATURE]-Add-BEGIN by TCTSH.szy, 1644521, 2016/02/26, remove Parallel-charger*/
 	/* Parallel-charger configuration */
-	smb1351-charger@1d {
+	/*smb1351-charger@1d {
 		compatible = "qcom,smb1351-charger";
 		reg = <0x1d>;
 		qcom,parallel-en-pin-polarity = <1>;
 		qcom,parallel-charger;
 		qcom,float-voltage-mv = <4250>;
 		qcom,recharge-mv = <100>;
+	};*/
+        /*[FEATURE]-Add-END by TCTSH.szy, 1644521, 2015/02/26, remove Parallel-charger*/
+
+	/*[Task]-Modified-BEGIN by TCTSH.Cedar, 1784755, 2016/03/11, idol4 only use ak4375*/
+	/*HIFI DAC, ak4375*/
+	ak4375@10 {
+		compatible = "akm,ak4375";
+		reg = <0x10>;
+		pinctrl-names = "ak4375_dac_active","ak4375_dac_suspend";
+		pinctrl-0 = <&dac_pdn_active &dac_ldo_ctl_active>;
+		pinctrl-1 = <&dac_pdn_suspend &dac_ldo_ctl_suspend>;
+		akm,dac-gpio = <&msm_gpio 126 0x00>;
+		akm,ldo-gpio = <&msm_gpio 2 0x00>;
+		vdd-supply = <&pm8950_l5>;
 	};
+	/*[Task]-Modified-END   by TCTSH.Cedar, 1784755, 2016/03/11, idol4 only use ak4375*/
+
+        /*two smartPA, nxp tfa9890, only provide one interface i2c addr 0x34 0x35*/
+        tfa9897@38 {
+            compatible = "nxp,tfa9890";
+            reg = <0x38>;
+            pinctrl-names = "nxp9890_spk_rcv_switch_active","nxp9890_spk_rcv_switch_suspend";
+			/*[FEATURE]-Add-BEGIN by TCTSH.Cedar, 526254, 2015/10/23, add pinctrl for reset pin*/
+            pinctrl-0 = <&nxp9890_spk_rcv_active &nxp9890_rst_active>;
+            pinctrl-1 = <&nxp9890_spk_rcv_suspend &nxp9890_rst_suspend>;
+			/*[FEATURE]-Add-END   by TCTSH.Cedar, 526254, 2015/10/23, add pinctrl for reset pin*/
+            tfa,rst-gpio = <&msm_gpio 68 0x00>;
+            tfa,spk-rcv-switch1 = <&msm_gpio 94 0x00>;
+            tfa,spk-rcv-switch2 = <&msm_gpio 47 0x00>;
+            vdd-supply = <&pm8950_l5>;
+        };
+        tfa9897@40 {
+            compatible = "nxp,tfa9890";
+            reg = <0x40>;
+            vdd-supply = <&pm8950_l5>;
+        };
+
 };
+/*sun zhangyang add for idol4 sn3191 led begin, task1030308, 2015.12.04*/
+&i2c_5{
+	sn31@68{
+		 compatible = "sn31,sn3191";
+		 reg = <0x68>;
+	         sn31,en-gpio = <&msm_gpio 37 0x00>;
+                 vcc_i2c-supply = <&pm8950_l5>;
+                 sn31,vi2c = "vcc_i2c";
+	       };
+      };
+/*sun zhangyang add for idol4 sn3191 led end, task1030308, 2015.12.04*/
 
 &i2c_5 { /* BLSP2 QUP1 */
 	nq@28 {
@@ -75,6 +167,19 @@
 };
 
 &soc {
+	/*[FEATURE]-Add-BEGIN by TCTSH.Cedar, 526254, 2015/09/23, add HALL for Idol455*/
+	hall:qcom,hall {
+		cell-index = <0>;
+		compatible = "qcom,hall";
+		interrupt-parent = <&msm_gpio>;
+		interrupts = <46 0x2>,<97 0x2>;
+		interrupt-gpios = <&msm_gpio 46 0x00>,<&msm_gpio 97 0x00>;
+		vdd-supply = <&pm8950_l6>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&hall_default>;
+	};
+	/*[FEATURE]-Add-END   by TCTSH.Cedar, 526254, 2015/09/23, add HALL for Idol455*/
+
 	gen-vkeys {
 		compatible = "qcom,gen-vkeys";
 		label = "synaptics_dsx";
@@ -112,12 +217,66 @@
 			label = "volume_up";
 			gpios = <&msm_gpio 85 0x1>;
 			linux,input-type = <1>;
-			linux,code = <115>;
+			linux,code = <115>;//szy moddify for pio volumn key, defect1400815,2016.01.12.
 			debounce-interval = <15>;
 		};
+          /*sun zhangyang modify for boomkey begin,2015.9.23*/
+                boom_key {
+                         label = "boom_key";
+			 gpios = <&msm_gpio 62 0x1>;
+			 linux,input-type = <1>;
+			 linux,code = <550>;
+			 gpio-key,wakeup;
+			 debounce-interval = <15>;
+                };
+         /*sun zhangyang modify for boomkey end,2015.9.23*/
 	};
 
-	 sound {
+       //sun zhangyang add for 1052675, begin
+       tcl_check_ca:tcl,tcl_check_ca{
+            compatible = "tcl,tcl_check_ca";
+            tcl,board_id0 = <&msm_gpio 32 0>;
+            tcl,board_id1 = <&msm_gpio 132 0>;
+            tcl,board_id2 = <&msm_gpio 23 0>;
+            pinctrl-names = "boardid_config";
+	    pinctrl-0 = <&boardid0_config &boardid1_config &boardid2_config>;
+       };
+      //sun zhangyang add for 1052675, end
+
+/*xiaoming.hu@tcl.com for front led*/
+       front_pwm_led:tcl,front_pwm_led {
+		      compatible = "tcl,front_flash_led";
+                      linux,name = "led_G";
+		      led-mode = <0>;
+		      qcom,default-led-trigger = "pwm_trigger";
+                      qcom,enable-gpio = <&pmi8950_gpios 1 0>;
+		      qcom,flash-gpio = <&msm_gpio 33 0>;
+	              qcom,pwm-gpio = <&msm_gpio 38 0>;
+                      pwms = <&pmi8950_pwm 0 0>;//sun zhangyang add for pwm.
+	};
+        front_flash_led:tcl,front_flash_led {
+		      compatible = "tcl,front_flash_led";
+                      linux,name = "led_flash";
+		      led-mode = <1>;
+		      qcom,max-current = <200>;
+		      qcom,current = <120>;
+                      qcom,default-led-trigger = "flash_trigger";
+                      qcom,enable-gpio = <&pmi8950_gpios 1 0>;
+		      qcom,flash-gpio = <&msm_gpio 33 0>;
+	              qcom,pwm-gpio = <&msm_gpio 38 0>;
+	};
+        front_torch_led:tcl,front_torch_led {
+		      compatible = "tcl,front_flash_led";
+                      linux,name = "led_torch";
+		      led-mode = <2>;
+		      qcom,max-current = <200>;
+		      qcom,current = <120>;
+                      qcom,default-led-trigger = "torch_trigger";
+                      qcom,enable-gpio = <&pmi8950_gpios 1 0>;
+		      qcom,flash-gpio = <&msm_gpio 33 0>;
+	              qcom,pwm-gpio = <&msm_gpio 38 0>;
+	};       
+	sound {
 		compatible = "qcom,msm8952-audio-codec";
 		qcom,model = "msm8952-snd-card-mtp";
 		reg = <0xc051000 0x4>,
@@ -129,42 +288,53 @@
 			    "csr_gp_io_lpaif_pri_pcm_pri_mode_muxsel",
 			    "csr_gp_io_mux_quin_ctl";
 
-		qcom,msm-ext-pa = "primary";
+		qcom,msm-ext-pa = "primary","quaternary", "quinary";
 		qcom,msm-mclk-freq = <9600000>;
-		qcom,msm-mbhc-hphl-swh = <0>;
+		qcom,msm-mbhc-hphl-swh = <1>;
 		qcom,msm-mbhc-gnd-swh = <0>;
-		qcom,msm-hs-micbias-type = "external";
+		qcom,msm-hs-micbias-type = "internal";
 		qcom,msm-micbias1-ext-cap;
 		qcom,audio-routing =
 			"RX_BIAS", "MCLK",
 			"SPK_RX_BIAS", "MCLK",
 			"INT_LDO_H", "MCLK",
 			"MIC BIAS External", "Handset Mic",
-			"MIC BIAS External2", "Headset Mic",
+			"MIC BIAS Internal2", "Headset Mic",
 			"MIC BIAS External", "Secondary Mic",
 			"AMIC1", "MIC BIAS External",
-			"AMIC2", "MIC BIAS External2",
-			"AMIC3", "MIC BIAS External",
-			"WSA_SPK OUT", "VDD_WSA_SWITCH",
-			"SpkrMono WSA_IN", "WSA_SPK OUT";
+			"AMIC2", "MIC BIAS Internal2",
+			"AMIC3", "MIC BIAS External";
 		qcom,msm-gpios =
 			"pri_i2s",
-			"us_eu_gpio";
+			"quat_i2s",
+			"quin_i2s";
 		qcom,pinctrl-names =
 			"all_off",
 			"pri_i2s_act",
-			"us_eu_gpio_act",
-			"pri_i2s_us_eu_gpio_act";
+			"quin_i2s_act",
+			"quat_i2s_act",
+			"pri_quin_i2s_act",
+			"pri_quat_i2s_act",
+			"quin_quat_i2s_act",
+			"pri_quin_quat_i2s_act"; /*Kun.Guan & Xing.Wang add pri quat quin i2s pinctrl, 2015-09-01*/
 		pinctrl-names =
 			"all_off",
 			"pri_i2s_act",
-			"us_eu_gpio_act",
-			"pri_i2s_us_eu_gpio_act";
-		pinctrl-0 = <&cdc_pdm_lines_sus &cdc_pdm_lines_2_sus &cross_conn_det_sus>;
-		pinctrl-1 = <&cdc_pdm_lines_act &cdc_pdm_lines_2_act &cross_conn_det_sus>;
-		pinctrl-2 = <&cdc_pdm_lines_sus &cdc_pdm_lines_2_sus &cross_conn_det_act>;
-		pinctrl-3 = <&cdc_pdm_lines_act &cdc_pdm_lines_2_act &cross_conn_det_act>;
-		qcom,cdc-us-euro-gpios = <&msm_gpio 63 0>;
+			"quin_i2s_act",
+			"pri_quin_i2s_act",
+			"quat_i2s_act",
+			"pri_quat_i2s_act",
+			"quin_quat_i2s_act",
+			"pri_quin_quat_i2s_act";  /*Kun.Guan & Xing.Wang add pri quat quin i2s pinctrl, 2015-09-01*/
+		pinctrl-0 = <&cdc_pdm_lines_sus &cdc_pdm_lines_2_sus &quin_mi2s_mclk_sus &quin_mi2s_sclk_sus &quin_mi2s_ws_data_sus &quat_mi2s_lines_sus>;
+		pinctrl-1 = <&cdc_pdm_lines_act &cdc_pdm_lines_2_act &quin_mi2s_mclk_sus &quin_mi2s_sclk_sus &quin_mi2s_ws_data_sus &quat_mi2s_lines_sus>;
+		pinctrl-2 = <&cdc_pdm_lines_sus &cdc_pdm_lines_2_sus &quin_mi2s_mclk_act &quin_mi2s_sclk_act &quin_mi2s_ws_data_act &quat_mi2s_lines_sus>;
+		pinctrl-3 = <&cdc_pdm_lines_act &cdc_pdm_lines_2_act &quin_mi2s_mclk_act &quin_mi2s_sclk_act &quin_mi2s_ws_data_act &quat_mi2s_lines_sus>;
+		pinctrl-4 = <&cdc_pdm_lines_sus &cdc_pdm_lines_2_sus &quin_mi2s_mclk_sus &quin_mi2s_sclk_sus &quin_mi2s_ws_data_sus &quat_mi2s_lines_act>;
+		pinctrl-5 = <&cdc_pdm_lines_act &cdc_pdm_lines_2_act &quin_mi2s_mclk_sus &quin_mi2s_sclk_sus &quin_mi2s_ws_data_sus &quat_mi2s_lines_act>;
+		pinctrl-6 = <&cdc_pdm_lines_sus &cdc_pdm_lines_2_sus &quin_mi2s_mclk_act &quin_mi2s_sclk_act &quin_mi2s_ws_data_act &quat_mi2s_lines_act>;
+		pinctrl-7 = <&cdc_pdm_lines_act &cdc_pdm_lines_2_act &quin_mi2s_mclk_act &quin_mi2s_sclk_act &quin_mi2s_ws_data_act &quat_mi2s_lines_act>;  /*Kun.Guan & Xing.Wang add pri quat quin i2s pinctrl, 2015-09-01*/
+
 		asoc-platform = <&pcm0>, <&pcm1>, <&pcm2>, <&voip>, <&voice>,
 				<&loopback>, <&compress>, <&hostless>,
 				<&afe>, <&lsm>, <&routing>, <&lpa>,
@@ -199,100 +369,21 @@
 				"msm-dai-q6-dev.32773", "msm-dai-q6-dev.32770";
 		asoc-codec = <&stub_codec>, <&pm8950_cajon_dig>;
 		asoc-codec-names = "msm-stub-codec.1", "cajon_codec";
-		asoc-wsa-codec-names = "wsa881x-i2c-codec.8-000f";
-		asoc-wsa-codec-prefixes = "SpkrMono";
-
-		msm-vdd-wsa-switch-supply = <&pm8950_l13>;
-		qcom,msm-vdd-wsa-switch-voltage = <3075000>;
-		qcom,msm-vdd-wsa-switch-current = <5000>;
-	};
-
-	i2c@7af8000 {
-		wsa881x-i2c-codec@e {
-			compatible = "qcom,wsa881x-i2c-codec";
-			reg = <0x0e>;
-			qcom,msm-gpios = "wsa_clk",
-					"wsa_reset",
-					"wsa_vi";
-			qcom,pinctrl-names = "all_off",
-					"wsa_clk",
-					"wsa_active",
-					"wsa_clk_active",
-					"wsa_vi",
-					"wsa_clk_vi",
-					"wsa_active_vi",
-					"wsa_all";
-			pinctrl-names = "all_off",
-					"wsa_clk",
-					"wsa_active",
-					"wsa_clk_active",
-					"wsa_vi",
-					"wsa_clk_vi",
-					"wsa_active_vi",
-					"wsa_all";
-			pinctrl-0 = <&wsa_clk_off &wsa_suspend &wsa_vi_sus>;
-			pinctrl-1 = <&wsa_clk_on &wsa_suspend &wsa_vi_sus>;
-			pinctrl-2 = <&wsa_clk_off &wsa_active &wsa_vi_sus>;
-			pinctrl-3 = <&wsa_clk_on &wsa_active &wsa_vi_sus>;
-			pinctrl-4 = <&wsa_clk_off &wsa_suspend &wsa_vi_act>;
-			pinctrl-5 = <&wsa_clk_on &wsa_suspend &wsa_vi_act>;
-			pinctrl-6 = <&wsa_clk_off &wsa_active &wsa_vi_act>;
-			pinctrl-7 = <&wsa_clk_on &wsa_active &wsa_vi_act>;
-		};
-		wsa881x-i2c-codec@44 {
-			compatible = "qcom,wsa881x-i2c-codec";
-			reg = <0x44>;
-		};
-		wsa881x-i2c-codec@f {
-			compatible = "qcom,wsa881x-i2c-codec";
-			reg = <0x0f>;
-			qcom,msm-gpios = "wsa_clk",
-					"wsa_reset",
-					"wsa_vi";
-			qcom,pinctrl-names = "all_off",
-					"wsa_clk",
-					"wsa_active",
-					"wsa_clk_active",
-					"wsa_vi",
-					"wsa_clk_vi",
-					"wsa_active_vi",
-					"wsa_all";
-			pinctrl-names = "all_off",
-					"wsa_clk",
-					"wsa_active",
-					"wsa_clk_active",
-					"wsa_vi",
-					"wsa_clk_vi",
-					"wsa_active_vi",
-					"wsa_all";
-			pinctrl-0 = <&wsa_clk_off &wsa_suspend &wsa_vi_sus>;
-			pinctrl-1 = <&wsa_clk_on &wsa_suspend &wsa_vi_sus>;
-			pinctrl-2 = <&wsa_clk_off &wsa_active &wsa_vi_sus>;
-			pinctrl-3 = <&wsa_clk_on &wsa_active &wsa_vi_sus>;
-			pinctrl-4 = <&wsa_clk_off &wsa_suspend &wsa_vi_act>;
-			pinctrl-5 = <&wsa_clk_on &wsa_suspend &wsa_vi_act>;
-			pinctrl-6 = <&wsa_clk_off &wsa_active &wsa_vi_act>;
-			pinctrl-7 = <&wsa_clk_on &wsa_active &wsa_vi_act>;
-		};
-		wsa881x-i2c-codec@45 {
-			compatible = "qcom,wsa881x-i2c-codec";
-			reg = <0x45>;
-		};
 	};
 };
 
+/*[Defect]-Add-BEGIN by TCTSH.Cedar, 1553165, 2016/03/15, add clk req for BB_CLK2_EN*/
 &pm8950_gpios {
-	gpio@c400 {
-		qcom,mode = <1>;
-		qcom,output-type = <0>;
-		qcom,pull = <0>;
+	gpio@c400 { /* GPIO 5 */
+		qcom,mode = <0>; /* Digital input */
+		qcom,pull = <5>;
 		qcom,vin-sel = <2>;
-		qcom,out-strength = <3>;
-		qcom,src-sel = <0>;
+		qcom,src-sel = <2>;
 		qcom,master-en = <1>;
 		status = "okay";
 	};
 };
+/*[Defect]-Add-END   by TCTSH.Cedar, 1553165, 2016/03/15, add clk req for BB_CLK2_EN*/
 
 &blsp1_uart2 {
 	status = "ok";
@@ -303,8 +394,8 @@
 /{
 	mtp_batterydata: qcom,battery-data {
 		qcom,batt-id-range-pct = <15>;
-		#include "batterydata-itech-3000mah-4200mv.dtsi"
-		#include "batterydata-itech-3000mah.dtsi"
+		#include "tcl-idol4-2600mah.dtsi"//TCL sun zhangyang add for idol4 battery profile, task965190,2015.11.19
+		#include "TLp026E2-2610mA.dtsi"//TCL sun zhangyang add for idol4 second battery profile, DEFECT1785315,2016.03.11
 	};
 };
 
@@ -314,8 +405,10 @@
 
 &pmi8950_charger {
 	qcom,battery-data = <&mtp_batterydata>;
-	qcom,chg-led-support;
-	qcom,chg-led-sw-controls;
+/*sun zhangyang add for idol4 sn3191 led begin, task1030308, 2015.12.04*/
+	qcom,chg-led-support;//[TASK]-modfiy by sun zhangyang,12/30/2015, task:1271765,1271793
+	//qcom,chg-led-sw-controls;
+/*sun zhangyang add for idol4 sn3191 led end, task1030308, 2015.12.06*/
 };
 
 &spmi_bus {
@@ -379,9 +472,12 @@
 	qcom,vdd-io-voltage-level = <1800000 2950000>;
 	qcom,vdd-io-current-level = <200 22000>;
 
-	pinctrl-names = "active", "sleep";
-	pinctrl-0 = <&sdc2_clk_on &sdc2_cmd_on &sdc2_data_on &sdc2_cd_on>;
-	pinctrl-1 = <&sdc2_clk_off &sdc2_cmd_off &sdc2_data_off &sdc2_cd_off>;
+/* [PLATFORM]-Mod-BEGIN by TCTSH.FanJianjun, 2015/11/18, config sim det gpios to make sd card det voltage is right, task: 884456 */
+       pinctrl-names = "active", "sleep", "onetime";
+       pinctrl-0 = <&sdc2_clk_on &sdc2_cmd_on &sdc2_data_on &sdc2_cd_on>;
+       pinctrl-1 = <&sdc2_clk_off &sdc2_cmd_off &sdc2_data_off &sdc2_cd_off>;
+       pinctrl-2 = <&simcard_det_pins_default>;
+/* [PLATFORM]-Mod-END by TCTSH.FanJianjun */
 
 	#address-cells = <0>;
 	interrupt-parent = <&sdhc_2>;
@@ -392,7 +488,7 @@
 			1 &intc 0 221 0
 			2 &msm_gpio 67 0>;
 	interrupt-names = "hc_irq", "pwr_irq", "status_irq";
-	cd-gpios = <&msm_gpio 67 0x1>;
+	cd-gpios = <&msm_gpio 67 0x0>; // PR 526254. Modified by jianjun.fan, if no SD card inserted, the SD_CARD_DET_N level is 0.
 
 	status = "ok";
 };
@@ -401,15 +497,25 @@
 	qcom,mdss-pref-prim-intf = "dsi";
 };
 
-&dsi_truly_1080_vid {
-	qcom,mdss-dsi-pan-enable-dynamic-fps;
-	qcom,mdss-dsi-pan-fps-update = "dfps_immediate_porch_mode_vfp";
+/* add_begin idol4 lcd nt35596_video by jhyu*/
+&dsi_nt35596_1080_vid {
+	qcom,cont-splash-enabled;
+//	qcom,mdss-dsi-pan-enable-dynamic-fps;
+//	qcom,mdss-dsi-pan-fps-update = "dfps_immediate_porch_mode_vfp";
 	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
 };
 
+/* add_end idol4 lcd nt35596_video by jhyu*/
+
+/* add_begin idol4 lcd nt35695_cmd by jhyu*/
+/*&dsi_nt35695_1080_cmd {
+	qcom,cont-splash-enabled;
+	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
+};*/
+/* add_end idol4 lcd nt35695_cmd by jhyu*/
 &pmx_mdss {
-	qcom,num-grp-pins = <3>;
-	qcom,pins = <&gp 90>, <&gp 0>, <&gp 91>;
+	qcom,num-grp-pins = <1>;
+	qcom,pins =<&gp 0>;
 };
 
 &pmx_mdss_te {
@@ -421,18 +527,26 @@
 	pinctrl-names = "mdss_default", "mdss_sleep";
 	pinctrl-0 = <&mdss_dsi_active &mdss_te_active>;
 	pinctrl-1 = <&mdss_dsi_suspend &mdss_te_suspend>;
-	qcom,dsi-pref-prim-pan = <&dsi_truly_1080_vid>;
+	qcom,dsi-pref-prim-pan = <&dsi_nt35596_1080_vid>;
 
-	qcom,platform-enable-gpio = <&msm_gpio 90 0>;
+	/* [FEATURE]-Mod-BEGIN by TCTSH.JHYU, task-1176273, 2015/12/17, add lcd detect gpio*/
+	qcom,platform-ld0-gpio = <&msm_gpio 86 0>;
+	qcom,platform-ld1-gpio = <&msm_gpio 22 0>;
+	/* [FEATURE]-Mod-END by TCTSH.JHYU*/	
+
 	qcom,platform-reset-gpio = <&msm_gpio 0 0>;
-	qcom,platform-bklight-en-gpio = <&msm_gpio 91 0>;
 };
-
-&dsi_truly_1080_cmd {
-	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
-	qcom,ulps-enabled;
-	qcom,panel-roi-alignment = <2 2 4 2 1080 2>;
+/* add_begin idol4 lcd nt35695_cmd by jhyu
+&mdss_dsi0 {
+	pinctrl-names = "mdss_default", "mdss_sleep";
+	pinctrl-0 = <&mdss_dsi_active &mdss_te_active>;
+	pinctrl-1 = <&mdss_dsi_suspend &mdss_te_suspend>;
+	qcom,dsi-pref-prim-pan = <&dsi_nt35695_1080_cmd>;
+	
+    qcom,platform-te-gpio = <&msm_gpio 24 0>;
+	qcom,platform-reset-gpio = <&msm_gpio 0 0>;
 };
+*/
 
 &labibb {
 	status = "ok";
