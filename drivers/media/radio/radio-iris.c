@@ -4014,25 +4014,6 @@ static int iris_vidioc_s_ctrl(struct file *file, void *priv,
 				radio->mode = FM_RECV;
 				iris_q_event(radio, IRIS_EVT_RADIO_READY);
 			}
-			/*[Defect]-Add-BEGIN by TCTSH.Cedar, 1273307, 2016/1/11, adjust SINR for idol4*/
-			#ifdef CONFIG_TCT_8X76_IDOL4
-			FMDBG("set SINR threshold to 6\n");
-			retval = hci_cmd(HCI_FM_GET_DET_CH_TH_CMD, radio->fm_hdev);
-			if (retval < 0) {
-				FMDERR("Failed to get SINR threshold %d\n", retval);
-				goto END;
-			}
-			saved_val = radio->ch_det_threshold.sinr;
-			radio->ch_det_threshold.sinr = 6;
-			retval = hci_set_ch_det_thresholds_req(&radio->ch_det_threshold,
-							 radio->fm_hdev);
-			if (retval < 0) {
-				FMDERR("Failed to set SINR threshold %d\n", retval);
-				radio->ch_det_threshold.sinr = saved_val;
-				goto END;
-			}
-			#endif
-			/*[Defect]-Add-END   by TCTSH.Cedar, 1273307, 2016/1/11, adjust SINR for idol4*/
 			break;
 		case FM_TRANS:
 			if (is_enable_tx_possible(radio) != 0) {
